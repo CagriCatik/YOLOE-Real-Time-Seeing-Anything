@@ -1,0 +1,31 @@
+# ============================================================================
+#  Ego-relative Spurnummerierung
+#  Geladen von yoloe_lane.config.IndexConfig -> yoloe_lane.lanes.indexing
+# ----------------------------------------------------------------------------
+#  Positionsbasierte Indizes (L0..Ln von links) rutschen, sobald eine Spurgrenze
+#  ausfaellt - Falschalarm ohne Szenenaenderung. Zwei Massnahmen dagegen:
+#    1. RELATIV nummerieren (Ego = 0). Ein Ausfall ausserhalb der Spanne
+#       zwischen Ego und Ziel verschiebt beide gleich und kuerzt sich weg.
+#    2. Verschmolzene Korridore an der BREITE erkennen: ein verschmolzener
+#       Korridor misst ein ganzzahliges Vielfaches der Spurbreite und wird
+#       durch virtuelle Grenzen wieder aufgeteilt.
+#  Nebeneffekt: der Standstreifen faellt automatisch heraus, weil seine Breite
+#  KEIN ganzzahliges Vielfaches ist.
+# ============================================================================
+
+# ---- Spurbreite in BEV-Pixeln ------------------------------------------------
+# 0 oder null = je Frame aus den Korridoren schaetzen (Standard).
+# Ein fester Wert ist NUR gueltig, solange die BEV-Skala konstant ist, also die
+# beiden Randlinien ueber die ganze Sequenz dieselbe Spurzahl einschliessen -
+# siehe die Skalen-Warnung in bev.yaml. Auf gemischtem Material ist er falsch.
+lane_width: 0
+
+# ---- Toleranz der Vielfachen-Erkennung ---------------------------------------
+# Wie weit eine Korridorbreite vom ganzzahligen Vielfachen abweichen darf.
+# Zu gross: der Standstreifen wird als Spur gezaehlt.
+# Zu klein: verschmolzene Korridore werden nicht mehr aufgeteilt.
+multiple_tolerance: 0.18
+
+max_merge: 4            # maximale Spurzahl, in die ein Korridor zerlegt wird
+width_cluster_factor: 1.15  # Korridore bis zu diesem Faktor ueber dem Minimum
+                            #   zaehlen zum Cluster der Spurbreitenschaetzung

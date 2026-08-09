@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Model/checkpoint artifacts.
+*.pt
+*.onnx
+*.ts
+
+data/*
+!data/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Szenario-Ergebnisse
+results/*
+!results/.gitkeep
+
+adascope.egg-info/
+
+# Heruntergeladene Modell-Testausgaben
+outputs/model_tests/
+*.png

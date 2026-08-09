@@ -1,0 +1,30 @@
+# ============================================================================
+#  Szenario: scenarien/lane_departure_3_lanes.mp4
+#  Aufruf:  yoloe-lane lane-debug --video scenarien/lane_departure_3_lanes.mp4 `
+#                                 --scenario lane_departure_3_lanes
+# ----------------------------------------------------------------------------
+#  Ein Szenario enthaelt AUSSCHLIESSLICH Abweichungen von der Basiskalibrierung,
+#  gegliedert nach Domaenen-Sektion (= Dateiname ohne .yaml). Alles Ungenannte
+#  kommt aus config/<domaene>.yaml bzw. dem Code-Default.
+#
+#  Messung ueber 246 Frames mit dieser Kalibrierung:
+#    Homographie   95 % fresh, 5 % held, 0 % none
+#    Korridore     4 in 245 von 246 Frames
+#    Spuren (rel)  3 in ALLEN 246 Frames, keine virtuellen Grenzen
+#    Spurbreite    Median 77 px
+#    Index-Spruenge 2 = 0.8 % der Uebergaenge
+#    Ereignisse    keine - korrekt, alle Co-Fahrzeuge bleiben auf rel=-1
+#    Ego in Spur   min 0.88, in 65 von 246 Frames unter 1.00
+#  Damit taugt der Abschnitt als Regressionsreferenz.
+# ============================================================================
+
+indexing:
+  # Durchgehend dieselbe dreispurige Fahrbahn: die BEV-Skala ist ueber die
+  # ganze Sequenz konstant, deshalb ist ein fester Wert hier zulaessig und
+  # stabiler als die Schaetzung. Auf gemischtem Material waere er falsch.
+  lane_width: 77
+
+events:
+  # Kurzer Clip mit sauberer Geometrie - die Entprellung darf knapper sein,
+  # ohne dass Flackern durchschlaegt.
+  confirm_frames: 2

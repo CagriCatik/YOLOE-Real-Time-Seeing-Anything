@@ -1,0 +1,16 @@
+# Sollereignisse fuer scenarien/lane_departure_3_lanes.mp4
+#
+# Belegt durch Sichtung und durch debug_metrics.csv: ueber alle 246 Frames
+# liegen 2-5 Co-Fahrzeuge mit plausiblem Footprint im Bild, und ihre
+# ego-relative Spur ist DURCHGEHEND -1. Kein Fahrzeug wechselt je in die
+# Ego-Spur -- es gibt hier schlicht kein Einscheren.
+#
+# Die leere Liste ist deshalb eine AUSSAGE, keine fehlende Datei: jedes
+# gemeldete cut_in oder cut_out auf dieser Aufnahme ist ein Falschalarm.
+#
+# Das Ego selbst driftet nach rechts (ego_in_lane faellt auf 0.89), aber ein
+# EIGENER Spurwechsel findet nicht statt -- es kehrt in seine Spur zurueck.
+# Fuer die Spurverlassenswarnung gibt es noch keinen EventKind, siehe README.
+
+tolerance: 8
+events: []

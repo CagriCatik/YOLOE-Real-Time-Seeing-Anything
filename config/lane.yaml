@@ -1,0 +1,56 @@
+# ============================================================================
+#  Spurerkennung in der Bildebene (Hough)
+#  Geladen von yoloe_lane.config.LaneConfig -> yoloe_lane.lanes.detection
+# ----------------------------------------------------------------------------
+#  Alle Werte sind PIXEL der unbeschnittenen HMI-Ansicht, nicht normiert.
+#  Sie sind damit aufloesungsabhaengig: aendert sich der Zuschnitt, muss diese
+#  Datei neu kalibriert werden. Das ist Absicht - die Hough-Schwellen haengen
+#  an absoluten Segmentlaengen und liessen sich nicht sinnvoll normieren.
+#
+#  Jeder Wert ist optional; was hier fehlt, kommt aus dem Code-Default in
+#  src/yoloe_lane/config/lane.py.
+# ============================================================================
+
+# ---- ROI-Trapez der Strassenflaeche -----------------------------------------
+# Vier Punkte [x, y] im Uhrzeigersinn ab unten links. Konvergiert zum
+# Fluchtpunkt. Alles ausserhalb wird vor der Kantenextraktion verworfen -
+# hier gehoeren HMI-Popups und das Kombiinstrument heraus.
+roi_polygon: [[15, 300], [470, 20], [760, 20], [1195, 295]]
+
+# ---- Weiss-Extraktion ueber den HLS-L-Kanal ---------------------------------
+white_l_min: 130       # heruntersetzen, wenn schwache Fern-Dashes fehlen
+white_l_max: 255
+
+# ---- Hough-Segmente ----------------------------------------------------------
+hough_threshold: 30    # Mindeststimmen je Linie
+hough_min_len: 30      # kuerzere Segmente werden verworfen (Pixel)
+hough_max_gap: 60      # Luecke, ueber die hinweg noch verbunden wird (Pixel)
+
+# ---- Referenzbaselines -------------------------------------------------------
+# y_bottom ist zugleich die Fahrbahn-Referenzlinie: Detektionen unterhalb davon
+# (plus pipeline.road_margin) gelten als Bildschirmelement, nicht als Fahrzeug.
+y_bottom: 295
+y_top: 55
+
+# ---- Filter und Clustering ---------------------------------------------------
+min_line_angle_deg: 20.0     # verwirft ~horizontale Segmente (Fahrzeugdaecher)
+cluster_slope_weight: 500.0  # Gewicht der Steigung im Distanzmass des Clusterings
+cluster_max_dist: 130.0      # ab dieser Distanz beginnt ein neuer Cluster
+min_cluster_support: 2       # Cluster mit weniger Segmenten werden verworfen;
+                             #   auf 1 setzen, wenn einzelne Fern-Dashes zaehlen
+                             #   sollen (mehr Grenzen, mehr Fehlpeaks)
+
+# ---- Ego-Referenzpunkt -------------------------------------------------------
+# Bild-x der Kameramitte am unteren Rand. Trennt links/rechts bei der
+# Rollenzuordnung der gefundenen Linien.
+ego_x_bottom: 600.0
+
+# ---- Robuster Ausgleich ------------------------------------------------------
+# Die Punkte mit dem groessten Abstand zur ersten Ausgleichsgeraden werden
+# verworfen und neu gefittet. Gemessen ueber 1573 Cluster aus allen Szenarien:
+# beim kritischen obersten Dezil faellt das Residuum von 19.2 auf 3.1 px (-84%),
+# ein Polynom 2. Grades bringt dort nur -16%. Die Stoerung sind also Ausreisser
+# (Leitplanke, Schatten, Fahrzeugkontur) und keine Kruemmung.
+# 0.0 schaltet ab und liefert den reinen Kleinstquadrate-Fit.
+robust_trim: 0.25
+robust_min_points: 6

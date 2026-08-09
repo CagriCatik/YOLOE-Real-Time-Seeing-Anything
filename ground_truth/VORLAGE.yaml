@@ -1,0 +1,24 @@
+# Vorlage fuer eine Szenario-Annotation.
+#
+# Ablegen als ground_truth/<szenario>.yaml -- gleicher Name wie in scenarien/.
+# Ohne diese Datei meldet die Tabelle "keine Annotation": der Lauf ist dann
+# nicht bewertbar, und "keine Ereignisse" ist nicht von "nichts erkannt" zu
+# unterscheiden. Genau diese Verwechslung hat drei Defekte in der State Machine
+# verdeckt.
+#
+# Vorgehen
+#   1. adascope scenarios <name> --views dash
+#   2. results/<name>/debug_dash.mp4 sichten und die Frames notieren, in denen
+#      ein Fahrzeug die Ego-Spurgrenze ueberschreitet
+#   3. hier eintragen und erneut laufen lassen -- die Spalte "Bewertung" zeigt
+#      Treffer, Fehlerkennungen und Falschalarme
+#
+# Der Rueckgabewert von `adascope scenarios` ist 0, wenn jede vorhandene
+# Annotation erfuellt ist. Damit taugt der Lauf als Regressionstest.
+
+tolerance: 8          # erlaubte Abweichung in Frames (Entprellung kostet einige)
+
+events:
+  # - {frame: 142, kind: cut_in,  track: any}    # any = Track-ID egal
+  # - {frame: 210, kind: cut_out, track: ID3}    # oder eine bestimmte
+  # Moegliche kind-Werte: cut_in, cut_out, aborted, ego_lane_change

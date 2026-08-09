@@ -1,0 +1,49 @@
+# ============================================================================
+#  Eigener Spurwechsel aus der Linienstruktur  (FR-3.1 bis FR-3.3)
+#  Geladen von adascope.config.EgoMotionConfig -> lanes.egomotion
+# ----------------------------------------------------------------------------
+#  DAS PRINZIP
+#  Wechselt das Ego die Spur, verschiebt sich die GESAMTE Linienstruktur
+#  seitlich -- alle Grenzen gleich weit, in Summe etwa eine Spurbreite.
+#  Das ist eine TRANSLATION.
+#
+#  Faehrt das Ego durch eine Kurve, verschiebt sich die Struktur auch, aber
+#  UNGLEICH: nahe Grenzen wenig, ferne viel. Das ist eine DREHUNG.
+#
+#      Translation (Wechsel)        Drehung (Kurve)
+#      ||||  ->  ||||               ||||  ->  \\
+#      alle gleich weit             fern mehr als nah
+#
+#  Diese Trennung ist laut Anforderung die SCHWAECHSTE ANNAHME des Systems.
+#  Solange sie nicht gegen Kurvenmaterial validiert ist, meldet der Ego-Pfad
+#  `unsicher` statt still ein Ereignis zu erzeugen (FR-3.3).
+# ============================================================================
+
+# Kumulierte parallele Verschiebung, ab der ein Wechsel angenommen wird --
+# als Anteil der Spurbreite. 0.6 statt 1.0, damit die Erkennung vor Abschluss
+# der Bewegung greift.
+shift_fraction: 0.60
+
+# Fenster in Frames, ueber das aufsummiert wird.
+#   zu kurz -> ein langsamer Wechsel faellt durch
+#   zu lang -> eine lange Kurve summiert sich zu einem Scheinwechsel
+window: 20
+
+# DER KURVEN-CONFOUNDER-TEST (FR-3.2).
+# Obergrenze fuer die Streuung der Einzelverschiebungen, relativ zur mittleren.
+# Bei echter Translation bewegen sich alle Grenzen gleich weit -> Streuung
+# klein. In einer Kurve nicht -> Streuung gross. Darueber gilt der Wechsel als
+# nicht belegt.
+max_spread: 0.45
+
+# Mindestens so viele Grenzen muessen ueber das Fenster durchgehend verfolgt
+# worden sein. Mit zwei Grenzen ist Translation nicht von Drehung zu
+# unterscheiden -- deshalb ist 2 die harte Untergrenze.
+min_boundaries: 3
+
+# FR-3.3: nicht belegte Wechsel als `unsicher` melden statt zu verschweigen.
+# Auf false gesetzt unterbleibt auch die Meldung.
+report_uncertain: true
+
+# Sperrzeit in Frames nach einem gemeldeten Wechsel.
+refractory: 25

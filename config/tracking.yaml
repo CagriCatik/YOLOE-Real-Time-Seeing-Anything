@@ -1,0 +1,32 @@
+# ============================================================================
+#  Fahrzeugdetektion und -tracking in der Bildebene (YOLO11 + ByteTrack)
+#  Geladen von yoloe_lane.config.TrackingConfig -> yoloe_lane.detection.tracking
+# ----------------------------------------------------------------------------
+#  Der Tracker bleibt in der BILDEBENE. Nachgelagerter BEV-Code projiziert
+#  ausschliesslich die Bbox-Unterkante, niemals die Fahrzeugflaeche oder eine
+#  Segmentierungsmaske - nur die Unterkante liegt in der Bodenebene.
+# ============================================================================
+
+# ---- Modell ------------------------------------------------------------------
+# Relativ zur Projektwurzel oder absolut. yolo11n ist die schnelle PoC-Variante;
+# fuer kleine Fernfahrzeuge ist yolo11s der bessere Genauigkeits-/Latenz-Punkt.
+weights: models/yolo11n.pt
+tracker: bytetrack.yaml   # oder botsort.yaml
+device: null              # null = Ultralytics waehlt; sonst 0, "cpu", "cuda:1"
+
+# ---- Detektionsschwellen -----------------------------------------------------
+confidence: 0.25
+iou: 0.50
+image_size: 1280
+
+# ---- Fahrzeugklassen (COCO) --------------------------------------------------
+# 2 car, 3 motorcycle, 5 bus, 7 truck
+class_ids: [2, 3, 5, 7]
+
+# ---- Ego-Ankerzone -----------------------------------------------------------
+# Die HMI-Ansicht ist eine Chase-Cam: das Ego-Fahrzeug ist selbst im Bild.
+# Beim ersten Auftreten wird das unterste Fahrzeug innerhalb dieser normierten
+# Zone [x0, y0, x1, y1] als Ego gewaehlt und danach ueber seine Track-ID
+# gehalten. Alle uebrigen Tracks sind Co-Fahrzeuge.
+ego_zone: [0.40, 0.30, 0.62, 0.68]
+ego_memory_frames: 15   # so lange wird die Ego-Identitaet ohne Detektion gehalten
