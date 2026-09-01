@@ -31,7 +31,7 @@ Zwei Konsequenzen fuer die Bedienung:
 
 YOLOE trifft diskrete Objekte gut (Schilder, Fahrzeuge) und flaechige
 Farbbereiche schlecht. Fuer Letztere ist die HSV-Schwelle unter `carpet:` in
-config/detection.yaml der zuverlaessigere Weg.
+configs/detection.yaml der zuverlaessigere Weg.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def configure() -> argparse.ArgumentParser:
     parser.add_argument("--prompts", nargs="+", default=None,
                         help="Textprompts; kurze Nominalphrasen treffen am besten")
     parser.add_argument("--from-config", action="store_true",
-                        help="Prompts aus config/detection.yaml nehmen "
+                        help="Prompts aus configs/detection.yaml nehmen "
                              "(model.classes + driving_area + hud)")
     parser.add_argument("--prompt-free", action="store_true",
                         help="prompt-freie Variante: findet, was sie kennt, ohne Vorgabe")

@@ -1,0 +1,62 @@
+# ============================================================================
+#  Persistente Kennungen fuer Spurgrenzen  (FR-1.4, FR-5.1)
+#  Geladen von adascope.config.BoundaryTrackConfig -> lanes.tracking_ids
+# ----------------------------------------------------------------------------
+#  Eine Grenzen-ID beantwortet NICHT "die wievielte Spur ist das" -- die
+#  Belegungsauswertung bleibt ego-relativ. Sie beantwortet "ist das dieselbe
+#  Linie wie im letzten Frame". Damit laesst sich ein Ereignis benennen
+#  ("ueber Grenze B3 nach links"), ohne die Zaehlung von links wieder
+#  einzufuehren, deren Rutschen der eigentliche Fehlermodus war.
+# ============================================================================
+
+# So weit darf eine Grenze je Frame wandern und gilt noch als dieselbe.
+# Deutlich UNTER der Spurbreite, sonst uebernimmt eine Grenze die Identitaet
+# ihrer Nachbarin. Deutlich UEBER der Eigenbewegung je Frame.
+max_shift: 35.0
+
+# Frames, die eine nicht gesehene Grenze ihre Kennung behaelt. Eine Strichluecke
+# soll keine neue Identitaet erzeugen.
+max_missing: 12
+
+# Ab so vielen Beobachtungen gilt eine Grenze als voll belastbar
+# (confidence 1.0 in den Per-Frame-Zustaenden). Darunter linear.
+confident_after: 8
+
+# ============================================================================
+#  Zeitliche Stabilisierung der Grenzensuche  (lanes.stabilize)
+# ----------------------------------------------------------------------------
+#  AUS als Standard, und das ist ein Messergebnis.
+#
+#  Die Annahme war: die Grenzenzahl schwankt (34 % der Frameuebergaenge auf
+#  adjusting_speed_scenario_8), weil eine stabile Struktur kurz ausfaellt.
+#  Nachgemessen stimmt sie nicht. Die Korridore sind legitim -- 0 % sind zu
+#  schmal, 70-78 % messen exakt eine Spurbreite. Die Zahl schwankt, weil am
+#  Rand des BEV echte Markierungen sichtbar werden und wieder verschwinden.
+#
+#  Halten ergaenzt dort keine Luecke, sondern sammelt an:
+#      mittlere Korridorzahl  4.26 -> 6.84
+#      verwertbare Spurliste  93 % -> 70 %
+#
+#  Wo die Struktur wirklich steht, hilft es (lane_departure_1_lane: Flackern
+#  8 % -> 2 %, Spurliste 42 % -> 44 %). Deshalb einschaltbar je Aufnahme --
+#  in configs/scenarios/<name>.yaml, nicht hier global.
+# ============================================================================
+stabilize: false
+
+# So weit darf eine Messung von der erwarteten Position abweichen und gilt noch
+# als dieselbe Grenze. ENGER als max_shift: hier wird die Messung zugeordnet,
+# dort die Kennung -- ein Fehlgriff hier erfindet Geometrie.
+search_radius: 22.0
+
+# Restsignal, das eine gehaltene Grenze im Histogramm noch zeigen muss, als
+# Anteil von bev.peak_min_pixels. Bei 0 wird rein zeitlich gehalten -- dann
+# ueberlebt auch eine wirklich verschwundene Grenze max_missing Frames.
+hold_min_ratio: 0.45
+
+# Beobachtungen in Folge, bevor eine NEUE Grenze gemeldet wird. Gilt nur in
+# einer bereits stehenden Struktur; beim Kaltstart wird sofort gemeldet, weil
+# es dort nichts gibt, wovon sich eine Scheingrenze abheben koennte.
+confirm_frames: 2
+
+# Support-Abschlag einer gehaltenen Grenze. Sie ist ergaenzt, nicht gemessen.
+hold_support: 0.5

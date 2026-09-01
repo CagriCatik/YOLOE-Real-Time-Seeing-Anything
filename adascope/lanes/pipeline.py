@@ -39,7 +39,8 @@ from ..config import (
 from ..detection import TrackedVehicle
 from .bev import (
     Footprint, assign_lane, build_lane_mask, corridors_from, footprint_is_plausible,
-    homography_from_pair, lane_histogram, outer_solid_pair, peaks_from_histogram,
+    homography_from_points, lane_histogram, source_points, outer_solid_pair,
+    peaks_from_histogram, restrict_to_driving_area, warp_lane_mask,
     project_footprint,
 )
 from .boundaries import Boundaries
@@ -66,18 +67,114 @@ class HomographyTracker:
     max_hold: int = 25
     H: np.ndarray | None = None
     held_frames: int = 0
+    # Glaettung der STUETZPUNKTE, nicht der Matrix. 0 = aus (jeder Frame neu),
+    # 1 = eingefroren. Die Matrixeintraege sind nichtlinear verkoppelt; ein
+    # Mittel ueber sie ergibt keine gueltige Homographie, ein Mittel ueber die
+    # vier Punkte schon.
+    #
+    # Warum ueberhaupt: die BEV-Skala ist auf den Abstand der beiden Randlinien
+    # normiert. Gemessen zittert dieser Abstand je Frame um 5-11 px im Median
+    # -- damit atmet die gesamte Bodenebene in jedem Frame neu ein. Genau das
+    # ist das Wackeln im Debugvideo.
+    smoothing: float = 0.0
+    max_point_jump: float = 90.0
+    max_width_change_ratio: float = 0.25
+    max_vanishing_jump: float = 160.0
+    max_top_width_ratio: float = 1.0
+    min_pair_continuity: float = 0.45
+    min_pair_support: int = 2
+    _src: np.ndarray | None = None
+    candidate_src: np.ndarray | None = None
+    last_rejection: str = ""
+    metrics: dict[str, float] = field(default_factory=dict)
 
-    def update(self, result: LaneResult) -> tuple[np.ndarray | None, HomographyState]:
-        pair = outer_solid_pair(result)
-        if pair is not None:
-            self.H = homography_from_pair(pair, self.lane, self.bev)
-            self.held_frames = 0
-            return self.H, "fresh"
+    @property
+    def accepted_src(self) -> np.ndarray | None:
+        return None if self._src is None else self._src.copy()
+
+    @staticmethod
+    def _vanishing_point(src: np.ndarray) -> np.ndarray | None:
+        """Schnittpunkt der linken und rechten Stuetzlinie in der Bildebene."""
+        bl, br, tr, tl = src
+        left = np.cross([bl[0], bl[1], 1.0], [tl[0], tl[1], 1.0])
+        right = np.cross([br[0], br[1], 1.0], [tr[0], tr[1], 1.0])
+        point = np.cross(left, right)
+        if abs(float(point[2])) < 1e-6:
+            return None
+        return np.asarray(point[:2] / point[2], dtype=np.float32)
+
+    def _validate(self, pair, src: np.ndarray) -> str:
+        bottom_width = float(src[1, 0] - src[0, 0])
+        top_width = float(src[2, 0] - src[3, 0])
+        confidence = min(pair[0].continuity, pair[1].continuity)
+        support = min(pair[0].support, pair[1].support)
+        self.metrics = {
+            "bottom_width": bottom_width, "top_width": top_width,
+            "top_width_ratio": top_width / max(bottom_width, 1e-6),
+            "pair_continuity": float(confidence), "pair_support": float(support),
+            "point_jump": 0.0, "width_change_ratio": 0.0,
+            "vanishing_jump": 0.0,
+        }
+        if bottom_width <= 0 or top_width <= 0:
+            return "invalid_order"
+        if top_width / bottom_width > self.max_top_width_ratio:
+            return "bad_perspective"
+        if confidence < self.min_pair_continuity:
+            return "low_continuity"
+        if support < self.min_pair_support:
+            return "low_support"
+        if self._src is None:
+            return ""
+
+        jumps = np.linalg.norm(src - self._src, axis=1)
+        point_jump = float(jumps.max())
+        old_bottom = float(self._src[1, 0] - self._src[0, 0])
+        old_top = float(self._src[2, 0] - self._src[3, 0])
+        width_change = max(
+            abs(bottom_width - old_bottom) / max(abs(old_bottom), 1.0),
+            abs(top_width - old_top) / max(abs(old_top), self.bev.min_pair_separation),
+        )
+        old_vp, new_vp = self._vanishing_point(self._src), self._vanishing_point(src)
+        vanishing_jump = (float(np.linalg.norm(new_vp - old_vp))
+                          if old_vp is not None and new_vp is not None else 0.0)
+        self.metrics.update(point_jump=point_jump,
+                            width_change_ratio=float(width_change),
+                            vanishing_jump=vanishing_jump)
+        if point_jump > self.max_point_jump:
+            return "point_jump"
+        if width_change > self.max_width_change_ratio:
+            return "width_jump"
+        if vanishing_jump > self.max_vanishing_jump:
+            return "vanishing_jump"
+        return ""
+
+    def _hold(self, reason: str) -> tuple[np.ndarray | None, HomographyState]:
+        self.last_rejection = reason
         if self.H is not None and self.held_frames < self.max_hold:
             self.held_frames += 1
             return self.H, "held"
-        self.H, self.held_frames = None, 0
+        self.H, self.held_frames, self._src = None, 0, None
         return None, "none"
+
+    def update(self, result: LaneResult) -> tuple[np.ndarray | None, HomographyState]:
+        pair = outer_solid_pair(result, self.lane, self.bev)
+        if pair is not None:
+            src = source_points(pair, self.lane)
+            self.candidate_src = src.copy()
+            rejection = self._validate(pair, src)
+            if rejection:
+                return self._hold(rejection)
+            if self._src is not None and self.smoothing > 0.0:
+                a = self.smoothing
+                src = a * self._src + (1.0 - a) * src
+            self._src = src
+            self.H = homography_from_points(src, self.bev)
+            self.held_frames = 0
+            self.last_rejection = ""
+            return self.H, "fresh"
+        self.candidate_src = None
+        self.metrics = {}
+        return self._hold("no_pair")
 
 
 # --------------------------------------------------------------------------- #
@@ -118,6 +215,9 @@ class FrameAnalysis:
     h_state: HomographyState
     held_frames: int
     mask: np.ndarray                          # Weissmaske in der Bildebene
+    h_rejection: str = ""
+    h_metrics: dict[str, float] = field(default_factory=dict)
+    driving_area_src: np.ndarray | None = None
     mask_bev: np.ndarray | None = None
     histogram: np.ndarray | None = None
     # Grenzen als Kurven. Bei `histogram` sind es Polynome vom Grad 0, bei
@@ -255,7 +355,14 @@ class SequencePipeline:
         self.boundary_tracker = BoundaryTracker(bcfg)
         self.ego_motion = EgoMotionDetector(
             egomotion or (settings.egomotion if settings else EgoMotionConfig()))
-        self.homography = HomographyTracker(self.lane, self.bev, self.cfg.max_hold)
+        self.homography = HomographyTracker(self.lane, self.bev, self.cfg.max_hold,
+            smoothing=self.cfg.homography_smoothing,
+            max_point_jump=self.cfg.homography_max_point_jump,
+            max_width_change_ratio=self.cfg.homography_max_width_change_ratio,
+            max_vanishing_jump=self.cfg.homography_max_vanishing_jump,
+            max_top_width_ratio=self.cfg.homography_max_top_width_ratio,
+            min_pair_continuity=self.cfg.homography_min_pair_continuity,
+            min_pair_support=self.cfg.homography_min_pair_support)
         self.fsm = CutInTracker(events or (settings.events if settings else EventConfig()))
         self.log: list[Event] = []
         # Startpositionen des Vorframes fuer die Fenstersuche.
@@ -286,10 +393,22 @@ class SequencePipeline:
         # gewarpt wird -- sonst erzeugen Fahrzeugdaecher Histogramm-Peaks.
         mask = build_lane_mask(img, self.lane, [v.bbox for v in vehicles])
 
+        # Stage 3 remains deliberately permissive so every candidate is
+        # inspectable.  From here onward, however, only the accepted
+        # directional carriageway may contribute pixels.  Otherwise a valid
+        # but irrelevant marking on the opposite carriageway survives the
+        # homography and becomes a false histogram boundary.
+        accepted_src = self.homography.accepted_src
+        if H is not None and accepted_src is not None:
+            mask = restrict_to_driving_area(mask, accepted_src)
+
         # Wird schrittweise angereichert; jeder fruehe return ist ein
         # Stufenausfall, den die Debug-Ansichten als solchen zeigen sollen.
         fa = FrameAnalysis(index, name, img, lanes, vehicles, H, h_state,
                            self.homography.held_frames, mask)
+        fa.h_rejection = self.homography.last_rejection
+        fa.h_metrics = dict(self.homography.metrics)
+        fa.driving_area_src = accepted_src
         if H is None:
             # Die Bodenebene ist ganz weg, nicht nur kurz ueberbrueckt. Was
             # danach kommt, kann eine voellig andere Geometrie sein -- die
@@ -298,8 +417,8 @@ class SequencePipeline:
             fa.index_note = "keine Homographie"
             return self._finish(fa, {})
 
-        fa.mask_bev = cv2.warpPerspective(mask, H, (self.bev.width, self.bev.height))
-        fa.histogram = lane_histogram(fa.mask_bev)
+        fa.mask_bev = warp_lane_mask(mask, H, self.bev)
+        fa.histogram = lane_histogram(fa.mask_bev, self.bev)
         fa.boundary_fit = self._find_boundaries(fa.mask_bev, fa.histogram)
         # Kennungen VOR jeder Auswertung vergeben: sie sind die Verbindung
         # zum Vorframe und damit die Grundlage der Ego-Bewegungsanalyse.
@@ -364,7 +483,7 @@ class SequencePipeline:
                          histogram: np.ndarray | None = None) -> Boundaries:
         """Grenzen nach dem konfigurierten Verfahren suchen und stabilisieren."""
         if histogram is None:
-            histogram = lane_histogram(mask_bev)
+            histogram = lane_histogram(mask_bev, self.bev)
         if not self.windows.uses_windows:
             peaks = peaks_from_histogram(histogram, self.bev)
             found = Boundaries.from_positions(peaks, mask_bev.shape[0])

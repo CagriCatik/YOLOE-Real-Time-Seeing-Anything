@@ -10,7 +10,8 @@ from adascope.config import BevConfig, LaneConfig
 from adascope.lanes.bev import (
     Footprint, assign_lane, build_homography, build_lane_mask, corridors_from,
     footprint_is_plausible, homography_from_pair, lane_histogram, outer_solid_pair,
-    peaks_from_histogram, project_footprint,
+    peaks_from_histogram, project_footprint, restrict_to_driving_area,
+    warp_lane_mask,
 )
 from adascope.lanes.detection import LaneLine, LaneResult
 
@@ -23,7 +24,7 @@ def line(x_bottom: float, role: str) -> LaneLine:
 # --------------------------------------------------------------------------- #
 # Linienwahl fuer die Homographie                                             #
 # --------------------------------------------------------------------------- #
-def test_picks_the_outermost_solid_line_per_side():
+def test_picks_the_nearest_continuous_carriageway_boundary_when_configured():
     """Der stumme Fehler, den `{L.role: L}` hatte.
 
     Bei mehreren `left_solid` behielt die Komprehension die zuletzt einsortierte
@@ -32,8 +33,18 @@ def test_picks_the_outermost_solid_line_per_side():
     """
     result = LaneResult(lines=[line(64, "left_solid"), line(318, "left_solid"),
                                line(500, "right_dashed"), line(853, "right_solid")])
-    left, right = outer_solid_pair(result)
-    assert left.x_bottom == 64          # nicht 318
+    left, right = outer_solid_pair(
+        result, bcfg=BevConfig(boundary_pair_strategy="nearest_continuous"))
+    assert left.x_bottom == 318         # 64 kann zur Gegenfahrbahn gehoeren
+    assert right.x_bottom == 853
+
+
+def test_outermost_pair_remains_available_for_other_camera_topologies():
+    result = LaneResult(lines=[line(64, "left_solid"), line(318, "left_solid"),
+                               line(700, "right_solid"), line(853, "right_solid")])
+    left, right = outer_solid_pair(
+        result, bcfg=BevConfig(boundary_pair_strategy="outermost"))
+    assert left.x_bottom == 64
     assert right.x_bottom == 853
 
 
@@ -72,6 +83,32 @@ def test_vehicle_boxes_are_punched_out_of_the_lane_mask(lane_config):
     with_box = build_lane_mask(frame, lane_config, [box])
     assert without[150, 450] > 0
     assert with_box[150, 450] == 0
+
+
+def test_warped_lane_mask_stays_binary(bev_config):
+    """Ein binaeres Signal darf durch die Geometrie keine Grauwerte bekommen."""
+    mask = np.zeros((20, 20), np.uint8)
+    mask[5:15, 9:11] = 255
+    H = cv2.getRotationMatrix2D((10, 10), 17, 1.0)
+    H = np.vstack([H, [0.0, 0.0, 1.0]])
+    warped = warp_lane_mask(mask, H, bev_config)
+    assert set(np.unique(warped)) <= {0, 255}
+
+
+def test_driving_area_mask_removes_opposite_carriageway_pixels():
+    mask = np.full((100, 200), 255, np.uint8)
+    src = np.float32([[50, 90], [150, 90], [120, 10], [80, 10]])
+    kept = restrict_to_driving_area(mask, src)
+
+    assert kept[50, 100] == 255       # own directional carriageway
+    assert kept[50, 20] == 0          # opposite/outside area
+    assert kept[50, 180] == 0
+    assert mask[50, 20] == 255        # caller input is not modified
+
+
+def test_driving_area_mask_rejects_invalid_source_geometry():
+    with pytest.raises(ValueError, match="vier endliche"):
+        restrict_to_driving_area(np.zeros((20, 20), np.uint8), np.zeros((3, 2)))
 
 
 # --------------------------------------------------------------------------- #

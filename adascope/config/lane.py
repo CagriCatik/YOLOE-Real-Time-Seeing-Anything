@@ -31,17 +31,32 @@ class LaneConfig:
     # Weiss-Extraktion ueber den HLS-L-Kanal
     white_l_min: int = 130
     white_l_max: int = 255
+    # Canny auf der binaeren Weissmaske. Bislang standen 50/150 trotz der
+    # dokumentierten ``lane.canny_*``-Stellschrauben fest im Algorithmus.
+    canny_low: int = 50
+    canny_high: int = 150
     # Hough
     hough_threshold: int = 30
     hough_min_len: int = 30
     hough_max_gap: int = 60
     # Referenzbaselines fuer Fit und Zeichnung
+    # Ab dieser GEMESSENEN Durchgezogenheit gilt eine Linie als tauglicher
+    # Stuetzpunkt der Homographie. Eine gestrichelte Linie als Stuetzpunkt
+    # laesst die Bodenebene mit jedem Strich springen.
+    solid_min_continuity: float = 0.55
     y_bottom: int = 295
     y_top: int = 55
     # Filter und Clustering
     min_line_angle_deg: float = 20.0     # verwirft ~horizontale (Fahrzeugdaecher)
     cluster_slope_weight: float = 500.0  # Gewicht der Steigung im Distanzmass
     cluster_max_dist: float = 130.0
+    cluster_method: str = "union_find"
+    cluster_max_slope_diff: float = 0.35
+    cluster_max_lateral_gap: float = 28.0
+    cluster_max_top_dist: float = 65.0
+    # 0 deaktiviert das absolute Fluchtpunktband (z.B. fuer starke Kurven).
+    cluster_vanishing_x_tolerance: float = 0.0
+    cluster_max_y_gap: float = 100.0
     min_cluster_support: int = 2         # verwirft schwache Einzeldashes
     # Getrimmter Ausgleich: die Punkte mit dem groessten Abstand zur ersten
     # Ausgleichsgeraden werden verworfen und neu gefittet. Gemessen ueber 1573
@@ -60,8 +75,17 @@ class LaneConfig:
             raise ValueError(f"y_top={self.y_top} muss ueber y_bottom={self.y_bottom} liegen")
         if self.white_l_min >= self.white_l_max:
             raise ValueError("white_l_min muss kleiner als white_l_max sein")
+        if not 0 <= self.canny_low < self.canny_high <= 255:
+            raise ValueError("lane.canny_low/high brauchen 0 <= low < high <= 255")
         require_range(self.min_line_angle_deg, 0, 90, "min_line_angle_deg")
         require_positive(self.cluster_max_dist, "cluster_max_dist")
+        if self.cluster_method not in {"union_find", "greedy"}:
+            raise ValueError("lane.cluster_method muss union_find oder greedy sein")
+        for name in ("cluster_max_slope_diff", "cluster_max_lateral_gap",
+                     "cluster_max_top_dist", "cluster_max_y_gap"):
+            require_positive(getattr(self, name), f"lane.{name}")
+        if self.cluster_vanishing_x_tolerance < 0:
+            raise ValueError("lane.cluster_vanishing_x_tolerance darf nicht negativ sein")
         if self.min_cluster_support < 1:
             raise ValueError("min_cluster_support muss mindestens 1 sein")
         require_range(self.robust_trim, 0, 0.5, "lane.robust_trim")
@@ -108,6 +132,10 @@ class LaneConfig:
             y_top=round(self.y_top * sy),
             cluster_slope_weight=self.cluster_slope_weight * s,
             cluster_max_dist=self.cluster_max_dist * s,
+            cluster_max_lateral_gap=self.cluster_max_lateral_gap * s,
+            cluster_max_top_dist=self.cluster_max_top_dist * s,
+            cluster_vanishing_x_tolerance=self.cluster_vanishing_x_tolerance * sx,
+            cluster_max_y_gap=self.cluster_max_y_gap * sy,
             ego_x_bottom=self.ego_x_bottom * sx,
         )
 

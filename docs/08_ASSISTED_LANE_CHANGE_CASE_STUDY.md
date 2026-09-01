@@ -186,7 +186,7 @@ adascope detect `
 
 ## 5. Configuration (`config.yaml`)
 
-All tunable values live in [config/detection.yaml](../config/detection.yaml) — no code edits needed,
+All tunable values live in [configs/detection.yaml](../configs/detection.yaml) — no code edits needed,
 and the file itself is fully commented. ROIs are **perspective polygons** (lists
 of `[x, y]` points) that follow the lanes; every coordinate is a **fraction** of
 the frame (0–1), so it is resolution-independent. Colours are BGR; HSV ranges use
@@ -294,7 +294,7 @@ a clean cluster test set, and discard the menu/intro frames.
 
 | Path | Role |
 |------|------|
-| [config/detection.yaml](../config/detection.yaml) | all tunable parameters |
+| [configs/detection.yaml](../configs/detection.yaml) | all tunable parameters |
 | [adascope/cli/extract.py](../adascope/cli/extract.py) | ffmpeg-free frame sampler (`adascope extract`) |
 | [adascope/analysis.py](../adascope/analysis.py) | ROI + carpet analysis → frames / video / CSV |
 | [adascope/detector.py](../adascope/detector.py) | `Detector` port + `YoloeDetector` adapter |

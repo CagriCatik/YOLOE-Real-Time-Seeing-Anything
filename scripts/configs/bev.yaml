@@ -1,0 +1,58 @@
+# ============================================================================
+#  Bodenebene (Bird's Eye View) und Belegungsschwellen
+#  Geladen von yoloe_lane.config.BevConfig -> yoloe_lane.lanes.bev
+# ----------------------------------------------------------------------------
+#  WICHTIG ZUR SKALA
+#  Die Homographie bildet die beiden gefundenen durchgezogenen Randlinien auf
+#  x_left / x_right ab - unabhaengig davon, wie viele Spuren dazwischen liegen.
+#  Die BEV-Skala ist damit NICHT metrisch, sondern auf diesen Abstand normiert.
+#  Wechselt der Fahrbahntyp innerhalb einer Sequenz, bedeutet dieselbe
+#  Pixelbreite eine andere reale Breite. Gemessen: 2 Korridore -> 168 px/Spur,
+#  4 Korridore -> 77 px/Spur bei identischer Konfiguration.
+#  Konsequenz: indexing.lane_width darf nur dann fest gesetzt werden, wenn die
+#  Randlinien ueber die ganze Sequenz dieselbe Spurzahl einschliessen.
+# ============================================================================
+
+# ---- Groesse des BEV-Bildes ---------------------------------------------------
+width: 500
+height: 700
+
+# ---- Zielrechteck der Homographie (BEV-Pixel) --------------------------------
+# x_left/x_right: hierhin werden die beiden Randlinien abgebildet.
+# y_near/y_far:   Unterkante (nah) und Oberkante (fern) des Warp-Bereichs.
+x_left: 81
+x_right: 419
+y_near: 690
+y_far: 20
+
+# ---- Auswahl der Richtungsfahrbahn ------------------------------------------
+# Liegen auf einer Seite mehrere durchgezogene Linien, kann die aeusserste zur
+# Gegenfahrbahn gehoeren. Die naechste durchgezogene Nicht-Ego-Linie begrenzt
+# die Fahrbahnen dieses HMI-Bildes korrekt. `outermost` aktiviert bei Bedarf
+# das historische Verhalten.
+boundary_pair_strategy: nearest_continuous
+
+# ---- Spurfindung im Spaltenhistogramm ---------------------------------------
+peak_min_pixels: 10     # Mindesthoehe einer Saeule, damit sie als Grenze zaehlt
+peak_min_distance: 55   # Mindestabstand zweier Peaks.
+                        #   Regel: deutlich UNTER der schmalsten echten Spur-
+                        #   breite, deutlich UEBER der Breite der Fehlpeaks.
+                        #   Bei 25 ueberlebten Kleinstkorridore von 25..42 px;
+                        #   die Spurbreitenschaetzung griff dann diese ab und
+                        #   lieferte 30 statt 76 px. Der Referenz-Frame ist bis
+                        #   70 unveraendert.
+
+# ---- Einscher-Schwellen ------------------------------------------------------
+# Anteil der Fahrzeugbreite im Ego-Korridor. Diese Werte speisen zugleich die
+# Vorbelegung von events.yaml, wenn dort nichts anderes steht.
+thr_encroaching: 0.10
+thr_in_lane: 0.50
+
+# ---- Plausibilitaet der rueckprojizierten Footprint-Breite -------------------
+# Als Vielfaches der gemessenen Spurbreite. Im Fernfeld divergiert die
+# Rueckprojektion: kleine Bbox-Fehler in der Bildebene werden zu grossen
+# lateralen Fehlern in der Bodenebene. Werte ausserhalb dieses Bandes sind
+# Projektionsartefakte und werden als `invalid` verworfen, statt geraten -
+# das definiert die nutzbare Detektionsreichweite.
+fp_width_min_ratio: 0.25   # PKW belegt ~0.5, LKW ~0.75 Spurbreiten
+fp_width_max_ratio: 0.95

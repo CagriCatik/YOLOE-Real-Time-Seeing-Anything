@@ -57,7 +57,7 @@ graph LR
 - ✅ `data/frames/raw/frame_*.jpg` — All extracted frames
 - ✅ `outputs/roi_debug/debug.mp4` — Annotated video
 - ✅ `outputs/roi_debug/states.csv` — Per-frame data
-- ✅ `config/detection.yaml` — Updated ROIs & crop box
+- ✅ `configs/detection.yaml` — Updated ROIs & crop box
 
 ---
 
@@ -138,7 +138,7 @@ adascope detect \
 **Time:** 5 minutes (if crop box already set)
 
 ```bash
-# 1. Ensure crop_box is set in config/detection.yaml
+# 1. Ensure crop_box is set in configs/detection.yaml
 adascope crop-box
 
 # 2. Crop all frames
@@ -193,7 +193,7 @@ adascope roi-editor [OPTIONS]
 **Options:**
 ```
 --frame FRAME_PATH    Show this frame (default: frame_001784.jpg)
---config-dir CONFIG_DIR  Use config file (default: config/detection.yaml)
+--config-dir CONFIG_DIR  Use config file (default: configs/detection.yaml)
 ```
 
 **GUI Controls:**
@@ -207,7 +207,7 @@ adascope roi-editor [OPTIONS]
 | R | Reset to original (discard changes) |
 | Q / Esc | Quit without saving |
 
-**Output:** Updated `config/detection.yaml` with new `rois:` section
+**Output:** Updated `configs/detection.yaml` with new `rois:` section
 
 **Example workflow:**
 ```bash
@@ -229,7 +229,7 @@ adascope crop-box [OPTIONS]
 **Options:**
 ```
 --frame FRAME_PATH    Show this frame (default: frame_001784.jpg)
---config-dir CONFIG_DIR  Use config file (default: config/detection.yaml)
+--config-dir CONFIG_DIR  Use config file (default: configs/detection.yaml)
 --preset NAME         Load preset (e.g., --preset full_frame)
 ```
 
@@ -246,7 +246,7 @@ adascope crop-box [OPTIONS]
 | P | Save preview image to file |
 | Q / Esc | Quit without saving |
 
-**Output:** Updated `config/detection.yaml` with new `crop_box:` field
+**Output:** Updated `configs/detection.yaml` with new `crop_box:` field
 
 **Typical crop box for Audi cluster:**
 ```yaml
@@ -266,7 +266,7 @@ adascope detect [OPTIONS]
 --frame FRAME_PATH              Analyze single frame
 --frames DIR                    Analyze all frames in directory
 --video VIDEO_PATH              Analyze video file
---config-dir CONFIG_DIR            Configuration file (default: config/detection.yaml)
+--config-dir CONFIG_DIR            Configuration file (default: configs/detection.yaml)
 --model CHECKPOINT              Model weights (overrides config)
 --classes CLASS1 CLASS2 ...     Text prompts (overrides config)
 --conf THRESHOLD                Detection confidence 0..1 (default: from config)
@@ -454,7 +454,7 @@ adascope assemble --frames data/frames/raw --out output.mp4 --ext png
 
 1. **Lower detection threshold:**
    ```yaml
-   # config/detection.yaml
+   # configs/detection.yaml
    model:
      conf: 0.05  # Was 0.1, now more permissive
    ```
@@ -487,7 +487,7 @@ adascope crop-box
 # Then adjust, save with S
 ```
 
-Or manually edit `config/detection.yaml`:
+Or manually edit `configs/detection.yaml`:
 ```yaml
 crop_box: [0.0, 0.0, 1.0, 1.0]  # Full frame
 crop_box: [0.135, 0.175, 0.865, 0.655]  # Typical cluster crop
@@ -528,7 +528,7 @@ adascope assemble --frames data/frames/cropped --out cluster.mp4 --fps 25
 
 ```bash
 # Edit config
-nano config/detection.yaml
+nano configs/detection.yaml
 
 # Or use GUI:
 adascope roi-editor
@@ -659,7 +659,7 @@ A: Yes! Put it in `data/raw/` and run steps 4,5,7,8.
 A: Skip step 1 (download). Use an existing video file.
 
 **Q: How do I use a different YOLOE model?**  
-A: Edit `config/detection.yaml` or pass `--model models/yoloe-26l-seg.pt`
+A: Edit `configs/detection.yaml` or pass `--model models/yoloe-26l-seg.pt`
 
 **Q: Can I train my own model?**  
 A: Not directly. YOLOE is zero-shot (no training needed). See [05_DESIGN_AND_CONCEPTS.md](05_DESIGN_AND_CONCEPTS.md) for details.

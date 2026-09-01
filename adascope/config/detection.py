@@ -129,7 +129,7 @@ def _box(value: Any, name: str) -> tuple[float, float, float, float]:
     return x0, y0, x1, y1
 
 
-def load_detection_config(path: str | Path = "config/detection.yaml") -> DetectionConfig:
+def load_detection_config(path: str | Path = "configs/detection.yaml") -> DetectionConfig:
     with Path(path).open(encoding="utf-8") as stream:
         raw = yaml.safe_load(stream)
     if not isinstance(raw, dict):

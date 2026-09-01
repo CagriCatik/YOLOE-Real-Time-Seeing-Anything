@@ -17,7 +17,7 @@ adascope/render/debug_views.py  die Renderer je Perspektive
 adascope/render/camera.py       virtuelle Kamera auf die Bodenebene
 adascope/cli/lane_debug.py    Debug-Videos aus mehreren Perspektiven
 adascope/cli/sensitivity.py   Robustheitsmessungen (Belege für alle Zahlen)
-config/lane.yaml · bev.yaml · ...   die gesamte Kalibrierung
+configs/lane.yaml · bev.yaml · ...   die gesamte Kalibrierung
 test_images/test_frame_masked.png   Referenz-Frame
 outputs/debug/                      erzeugte Visualisierungen
 ```

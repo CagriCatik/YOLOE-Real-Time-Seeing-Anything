@@ -29,6 +29,23 @@ class BevConfig:
     # ueberlebten auf Video Kleinstkorridore von 25..42 px: das Einzelbild blieb
     # korrekt, aber die Spurbreitenschaetzung griff genau diese Fehlpeaks ab.
     peak_min_distance: int = 55
+
+    # Glaettungsbreite des Spaltenhistogramms in Pixeln, ungerade.
+    # Zu klein: jeder Strichrand wird ein Peak. Zu gross: benachbarte
+    # Spurgrenzen verschmelzen zu einem.
+    histogram_blur: int = 9
+    # Halbe Fensterbreite der Peaksuche: ein Peak muss in +-N Spalten das
+    # Maximum sein. Bestimmt, wie lokal ein Peak sein darf.
+    peak_window: int = 4
+    # Mindestabstand der beiden Randlinien am unteren Bildrand, in Pixeln.
+    # Darunter ist die Homographie entartet und verzerrt still, statt zu
+    # scheitern.
+    min_pair_separation: float = 40.0
+    # Welche durchgezogene Linie je Seite die befahrbare Richtungsfahrbahn
+    # begrenzt. ``nearest_continuous`` nimmt die dem Ego naechste gemessen
+    # durchgezogene Nicht-Ego-Linie: eine weiter aussen liegende Kante kann zur
+    # Gegenfahrbahn gehoeren. ``outermost`` behaelt das historische Verhalten.
+    boundary_pair_strategy: str = "outermost"
     # Einscher-Schwellen (Anteil der Fahrzeugbreite im Ego-Korridor)
     thr_encroaching: float = 0.10
     thr_in_lane: float = 0.50
@@ -44,6 +61,9 @@ class BevConfig:
             raise ValueError("x_left muss kleiner als x_right sein")
         if self.y_far >= self.y_near:
             raise ValueError("y_far muss kleiner als y_near sein (0 = fern)")
+        if self.boundary_pair_strategy not in {"nearest_continuous", "outermost"}:
+            raise ValueError(
+                "bev.boundary_pair_strategy muss nearest_continuous oder outermost sein")
         require_range(self.thr_encroaching, 0, 1, "bev.thr_encroaching")
         require_range(self.thr_in_lane, 0, 1, "bev.thr_in_lane")
         if self.thr_encroaching > self.thr_in_lane:

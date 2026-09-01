@@ -11,6 +11,8 @@ import numpy as np
 import pytest
 
 from adascope.runner import summarise
+from adascope.ground_truth import GroundTruth
+from adascope.perception_ground_truth import ExpectedPerceptionFrame
 from adascope.scenarios import RunSummary, discover, render_table, resolve
 
 
@@ -166,6 +168,25 @@ def test_table_renders_a_failed_run_without_dropping_it():
 
 def test_table_is_empty_but_valid_without_runs():
     assert "Keine Szenarien" in render_table([])
+
+
+def test_core_runner_writes_perception_score_csv(tmp_path, settings):
+    from adascope.runner import run_debug
+
+    source = tmp_path / "frames"
+    source.mkdir()
+    cv2.imwrite(str(source / "f000.png"),
+                np.zeros((457, 1209, 3), np.uint8))
+    truth = GroundTruth((), perception=(
+        ExpectedPerceptionFrame(frame=0, lane_count=1),))
+    out = tmp_path / "result"
+
+    summary = run_debug(source, settings, [], out, truth=truth)
+
+    assert summary.perception_score is not None
+    assert not summary.perception_score.perfect
+    assert (out / "debug_perception.csv").exists()
+    assert "debug_perception.csv" in (out / "summary.txt").read_text(encoding="utf-8")
 
 
 # --------------------------------------------------------------------------- #

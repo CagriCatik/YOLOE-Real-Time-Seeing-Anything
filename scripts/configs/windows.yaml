@@ -1,0 +1,87 @@
+# ============================================================================
+#  Spurgrenzensuche in der Bodenebene
+#  Geladen von adascope.config.WindowConfig -> adascope.lanes.windows
+# ----------------------------------------------------------------------------
+#  ZWEI VERFAHREN, DIESELBE AUSGABE
+#
+#  histogram   Spaltensumme ueber die volle BEV-Hoehe, Peaks = Spurgrenzen.
+#              Schnell und stabil -- setzt aber SENKRECHTE Saeulen voraus, also
+#              gerade Spuren. In einer Kurve wandert dieselbe Linie ueber viele
+#              Spalten, die Summe verschmiert, und der Peak faellt unter die
+#              Schwelle.
+#
+#  windows     Sliding Windows: unten anfangen, fensterweise nach oben laufen,
+#              die Fenstermitte jeweils dorthin nachfuehren, wo die Pixel
+#              liegen, und aus den Mitten ein Polynom fitten. Folgt der
+#              Kruemmung, kostet mehr Rechenzeit, braucht genug Pixel je
+#              Fenster.
+#
+#  Beide liefern ein Polynom je Grenze -- beim Histogramm vom Grad 0. Der
+#  nachgelagerte Code kennt deshalb nur EINE Darstellung.
+#
+#  WANN UMSTELLEN -- GEMESSEN, NICHT VERMUTET
+#
+#  Auf SYNTHETISCHEN KURVEN ist die Sache eindeutig. Die hoechste
+#  Histogramm-Saeule faellt schon bei maessiger Kruemmung um rund 75 %:
+#      Kruemmung   0 -> 658    120 -> 137 (-79 %)    300 -> Grenze faellt aus
+#  Die Fenster finden in allen Faellen alle vier Grenzen.
+#
+#  Auf DEM AKTUELLEN, NAHEZU GERADEN MATERIAL ist es KEIN durchgaengiger
+#  Gewinn (je 100 Frames, Spurliste und Index-Spruenge, histogram -> windows):
+#      acc_plus_1       100 % -> 100 %      8 ->  4
+#      acc_plus_1_vid   100 % -> 100 %     12 ->  0
+#      acc_plus_2        99 % ->  93 %      0 -> 29
+#      acc_plus_4        94 % ->  88 %     37 ->  0
+#      acc_plus_6        43 % ->  99 %      4 -> 21
+#      acc_plus_7        57 % ->  70 %      6 -> 23
+#  Kosten rund 13 -> 25 ms je Frame.
+#
+#  Faustregel: wo die Spurliste unter ~70 % liegt, ist `windows` einen
+#  Versuch wert (acc_plus_6: 43 -> 99 %). Wo sie schon nahe 100 % liegt und
+#  die Spruenge klein sind, verschlechtert es eher (acc_plus_2, acc_plus_5).
+#  Deshalb ist `histogram` der Standard und die Umstellung eine
+#  Einzelfallentscheidung je Aufnahme:
+#
+#      # configs/scenarios/<name>.yaml
+#      windows:
+#        method: windows
+#
+#  GRENZE DES VERFAHRENS
+#  Ab starker Kruemmung scheitert schon die BILDEBENE: der Geradenfit in
+#  Stufe 1 findet die beiden durchgezogenen Randlinien nicht mehr, es gibt
+#  keine Homographie, und die Fenster kommen gar nicht zum Zug (gemessen ab
+#  Kruemmung ~220). Sliding Windows sind fuer Kurven noetig, aber nicht
+#  hinreichend -- der Fit in der Bildebene braucht dieselbe Modellkapazitaet.
+# ============================================================================
+
+method: histogram          # histogram | windows
+
+# ---- Startpunkte -------------------------------------------------------------
+# Anteil der BEV-Hoehe von UNTEN, aus dem die Startpositionen kommen. Nah an der
+# Kamera ist die Maske am dichtesten und eine Kurve noch fast gerade.
+start_band: 0.30
+
+# ---- Fensterlauf -------------------------------------------------------------
+n_windows: 12        # Fenster von unten nach oben
+margin: 40           # halbe Fensterbreite in BEV-Pixeln. Zu klein: das Fenster
+                     #   verliert die Linie in engen Kurven. Zu gross: es faengt
+                     #   die Nachbarlinie mit ein.
+min_pixels: 25       # so viele Pixel braucht ein Fenster, um die Mitte
+                     #   nachzufuehren; sonst laeuft es mit der zuletzt
+                     #   gemessenen Richtung blind weiter (Strichluecke)
+min_windows_hit: 4   # so viele Fenster muessen getroffen haben, damit die
+                     #   Grenze ueberhaupt gilt -- sonst wird ein einzelner
+                     #   Fleck zur Spurlinie
+
+# ---- Fit ---------------------------------------------------------------------
+poly_degree: 2             # 2 = uebliche Fahrbahnkruemmung. 1 macht die Fenster
+                           #   zu einem reinen Ausreisserfilter, 3 neigt zum
+                           #   Schwingen zwischen wenigen Stuetzpunkten.
+min_points_per_degree: 3   # weniger Punkte -> Grad wird automatisch gesenkt.
+                           #   Ein Polynom 2. Grades durch zwei Punkte ist
+                           #   Rauschen mit drei Koeffizienten.
+
+# ---- Fortsetzung ueber Frames ------------------------------------------------
+reuse_previous_starts: true   # Startpositionen des Vorframes ergaenzen, wenn im
+                              #   Nahbereich gerade eine Strichluecke liegt
+max_start_shift: 60           # so weit darf ein Start je Frame wandern

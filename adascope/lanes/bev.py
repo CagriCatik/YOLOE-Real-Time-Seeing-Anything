@@ -60,22 +60,17 @@ class Footprint:
 # --------------------------------------------------------------------------- #
 # Stufe 1 - Homographie aus den durchgezogenen Randlinien                     #
 # --------------------------------------------------------------------------- #
-# Mindestabstand der beiden Randlinien am unteren Bildrand, in Pixeln.
-# Darunter ist die Homographie entartet.
-MIN_PAIR_SEPARATION = 40.0
+def outer_solid_pair(result: LaneResult, lcfg: LaneConfig | None = None,
+                     bcfg: BevConfig | None = None
+                     ) -> tuple[LaneLine, LaneLine] | None:
+    """Begrenzungspaar der eigenen Richtungsfahrbahn, oder ``None``.
 
+    Bewusst nicht `{L.role: L for L in lines}`: mehrere Linien koennen dieselbe
+    positionelle Rolle tragen. Welche davon die Richtungsfahrbahn begrenzt,
+    entscheidet `bev.boundary_pair_strategy` explizit.
 
-def outer_solid_pair(result: LaneResult) -> tuple[LaneLine, LaneLine] | None:
-    """Aeusserste durchgezogene Linie je Seite, oder None.
-
-    Bewusst nicht `{L.role: L for L in lines}`: bei mehreren `left_solid`
-    behaelt die Komprehension die zuletzt einsortierte -- das ist die dem Ego
-    naechste, nicht die Fahrbahnkante. Die Homographie wird dadurch stumm
-    schiefgezogen, ohne dass ein Fehler auftritt. Auf Videomaterial trat das in
-    41 % der Frames auf, und in 63 % fehlte eine der beiden Rollen ganz.
-
-    Warum es einen Rueckfall auf die aeusserste Linie gibt
-    -----------------------------------------------------
+    Warum es einen Rueckfall auf andere Linien gibt
+    -----------------------------------------------
     `left_solid` wird nur an Linien vergeben, die WEITER AUSSEN liegen als die
     ego-naechste. Faehrt das Ego auf der linken Spur, ist die Fahrbahnkante
     zugleich die ego-naechste Linie -- sie heisst dann `left_dashed`, und die
@@ -86,10 +81,10 @@ def outer_solid_pair(result: LaneResult) -> tuple[LaneLine, LaneLine] | None:
     Aufnahme lief mit 0 % Homographie, obwohl beide Randlinien durchgehend
     sichtbar waren.
 
-    Die Rollennamen sind an dieser Stelle positionell, nicht gemessen: keine
-    Stufe prueft, ob eine Linie wirklich durchgezogen ist. Was die Homographie
-    braucht, ist die **aeusserste Linie je Seite** -- danach wird gesucht, mit
-    den Rollen als bevorzugtem, nicht als einzigem Weg dorthin.
+    Die Rollennamen sind positionell, die `continuity` dagegen gemessen. Fuer
+    die Standardstrategie wird daher die dem Ego naechste kontinuierliche
+    Nicht-Ego-Linie je Seite genommen. Eine weiter aussen liegende Linie kann
+    die Aussenkante einer Gegenfahrbahn sein und darf die BEV nicht aufspannen.
     """
     left = [L for L in result.lines if L.role == "left_solid"]
     right = [L for L in result.lines if L.role == "right_solid"]
@@ -103,13 +98,54 @@ def outer_solid_pair(result: LaneResult) -> tuple[LaneLine, LaneLine] | None:
                  if L.x_bottom >= result.ego_right.x_bottom]
     if not left or not right:
         return None
-    outer_left = min(left, key=lambda L: L.x_bottom)
-    outer_right = max(right, key=lambda L: L.x_bottom)
+    # Unter den Kandidaten die GEMESSEN durchgezogenen bevorzugen. Eine
+    # gestrichelte Linie als Stuetzpunkt der Homographie ist der Grund fuer
+    # einen Teil des Wackelns: ihre Stuetzpunkte springen mit jedem Strich.
+    schwelle = (lcfg or LaneConfig()).solid_min_continuity
+    durch_l = [L for L in left if L.continuity >= schwelle]
+    durch_r = [L for L in right if L.continuity >= schwelle]
+    candidates_l, candidates_r = durch_l or left, durch_r or right
+    strategy = (bcfg or BevConfig()).boundary_pair_strategy
+    if strategy == "nearest_continuous":
+        # Eine weiter aussen liegende, ebenfalls durchgezogene Linie kann die
+        # Aussenkante der Gegenfahrbahn sein. Die dem Ego naechste gemessen
+        # durchgezogene Nicht-Ego-Linie ist der Richtungsteiler. Ego-naechste
+        # gestrichelte Rollen sind oben bereits nicht in den solid-Kandidaten.
+        boundary_left = max(candidates_l, key=lambda L: L.x_bottom)
+        boundary_right = min(candidates_r, key=lambda L: L.x_bottom)
+    else:  # Historisches Verhalten fuer abweichende Kameratopologien.
+        boundary_left = min(candidates_l, key=lambda L: L.x_bottom)
+        boundary_right = max(candidates_r, key=lambda L: L.x_bottom)
     # Zwei praktisch deckungsgleiche Linien ergeben eine entartete Homographie,
     # die alles Nachgelagerte still verzerrt statt zu scheitern.
-    if outer_right.x_bottom - outer_left.x_bottom < MIN_PAIR_SEPARATION:
+    if (boundary_right.x_bottom - boundary_left.x_bottom
+            < (bcfg or BevConfig()).min_pair_separation):
         return None
-    return outer_left, outer_right
+    return boundary_left, boundary_right
+
+
+def source_points(pair: tuple[LaneLine, LaneLine], lcfg: LaneConfig) -> np.ndarray:
+    """Die vier Stuetzpunkte in der Bildebene, im Uhrzeigersinn ab unten links.
+
+    Getrennt von der Matrix, damit sie ueber die Zeit geglaettet werden koennen
+    -- die Matrixeintraege selbst sind nichtlinear verkoppelt und lassen sich
+    nicht sinnvoll mitteln.
+    """
+    ls, rs = pair
+    return np.float32([
+        [ls.x_at(lcfg.y_bottom), lcfg.y_bottom],
+        [rs.x_at(lcfg.y_bottom), lcfg.y_bottom],
+        [rs.x_at(lcfg.y_top), lcfg.y_top],
+        [ls.x_at(lcfg.y_top), lcfg.y_top],
+    ])
+
+
+def homography_from_points(src: np.ndarray, bcfg: BevConfig) -> np.ndarray:
+    dst = np.float32([
+        [bcfg.x_left, bcfg.y_near], [bcfg.x_right, bcfg.y_near],
+        [bcfg.x_right, bcfg.y_far], [bcfg.x_left, bcfg.y_far],
+    ])
+    return cv2.getPerspectiveTransform(np.float32(src), dst)
 
 
 def homography_from_pair(pair: tuple[LaneLine, LaneLine], lcfg: LaneConfig,
@@ -163,19 +199,53 @@ def build_lane_mask(img: np.ndarray, lcfg: LaneConfig,
     return mask
 
 
+def restrict_to_driving_area(mask: np.ndarray, src: np.ndarray) -> np.ndarray:
+    """Keep only lane pixels inside the accepted directional carriageway.
+
+    ``src`` is the accepted homography quadrilateral in the order bottom-left,
+    bottom-right, top-right, top-left.  Detection deliberately keeps all line
+    candidates for diagnostics; this function is the semantic boundary before
+    BEV/histogram processing.  Markings on the opposite carriageway can remain
+    visible in stage 3, but cannot create a downstream histogram peak.
+    """
+    points = np.asarray(src, dtype=np.float32)
+    if points.shape != (4, 2) or not np.isfinite(points).all():
+        raise ValueError("src muss vier endliche 2D-Punkte enthalten")
+    area = np.zeros(mask.shape[:2], np.uint8)
+    polygon = np.rint(points).astype(np.int32)
+    cv2.fillConvexPoly(area, polygon, 255)
+    return cv2.bitwise_and(mask, area)
+
+
+def warp_lane_mask(mask: np.ndarray, H: np.ndarray,
+                   bcfg: BevConfig) -> np.ndarray:
+    """Binaere Spurmaske ohne erfundene Zwischenwerte in die BEV ziehen.
+
+    OpenCV verwendet sonst bilineare Interpolation. Deren graue Randpixel
+    wurden vom Histogramm mit ``> 0`` als voll belegte Pixel gezaehlt und
+    machten jede Markierung kuenstlich breiter. Nearest Neighbor erhaelt die
+    Semantik einer binaeren Maske: Hintergrund oder Spurpixel.
+    """
+    return cv2.warpPerspective(mask, H, (bcfg.width, bcfg.height),
+                               flags=cv2.INTER_NEAREST)
+
+
 # --------------------------------------------------------------------------- #
 # Stufe 3 - Spurgrenzen per Spaltenhistogramm im BEV                          #
 # --------------------------------------------------------------------------- #
-def lane_histogram(mask_bev: np.ndarray) -> np.ndarray:
+def lane_histogram(mask_bev: np.ndarray,
+                   cfg: BevConfig | None = None) -> np.ndarray:
     """Geglaettetes Spaltenhistogramm der BEV-Maske (Basis der Spurfindung)."""
+    blur = (cfg or BevConfig()).histogram_blur
     hist = (mask_bev > 0).sum(axis=0).astype(np.float32)
-    return cv2.GaussianBlur(hist.reshape(-1, 1), (1, 9), 0).ravel()
+    return cv2.GaussianBlur(hist.reshape(-1, 1), (1, blur), 0).ravel()
 
 
 def peaks_from_histogram(hist: np.ndarray, cfg: BevConfig) -> list[int]:
     peaks: list[int] = []
-    for x in range(4, len(hist) - 4):
-        if hist[x] != hist[x - 4:x + 5].max() or hist[x] < cfg.peak_min_pixels:
+    w = cfg.peak_window
+    for x in range(w, len(hist) - w):
+        if hist[x] != hist[x - w:x + w + 1].max() or hist[x] < cfg.peak_min_pixels:
             continue
         if peaks and x - peaks[-1] < cfg.peak_min_distance:
             if hist[x] > hist[peaks[-1]]:

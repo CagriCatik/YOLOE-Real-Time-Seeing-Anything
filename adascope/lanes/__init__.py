@@ -15,6 +15,7 @@ from .bev import (
     Footprint, assign_lane, build_homography, build_lane_mask, corridors_from,
     find_lane_boundaries, footprint_is_plausible, homography_from_pair,
     lane_histogram, outer_solid_pair, peaks_from_histogram, project_footprint,
+    restrict_to_driving_area, source_points, warp_lane_mask,
 )
 from .boundaries import Boundaries, fit_curve
 from .egomotion import EgoMotion, EgoMotionDetector
@@ -42,5 +43,6 @@ __all__ = [
     "estimate_lane_width", "estimate_lane_width_by_multiples", "find_lane_boundaries", "footprint_is_plausible",
     "homography_from_pair", "lane_histogram", "locate", "outer_solid_pair",
     "peaks_from_histogram", "project_footprint", "road_vehicles", "robust_line",
+    "restrict_to_driving_area", "source_points", "warp_lane_mask",
     "find_boundaries_windows", "fit_curve", "start_positions", "trace",
 ]

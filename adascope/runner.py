@@ -18,6 +18,7 @@ from .io import VideoWriter, iter_source, write_named, write_rows
 from .lanes import SequencePipeline
 from .render import available_views, make_view
 from .ground_truth import GroundTruth, score_events
+from .perception_ground_truth import PERCEPTION_FIELDS, score_perception
 from .scenarios import RunSummary
 
 METRIC_FIELDS = [
@@ -119,6 +120,9 @@ def run_debug(source: Path, settings: Settings, views: list[str], outdir: Path,
 
     rows: list[dict] = []
     states: list[dict] = []
+    perception_analyses = {}
+    perception_frames = ({item.frame for item in truth.perception}
+                         if truth is not None else set())
     try:
         for index, name, frame in _limited(frames, stride, max_frames):
             if crop is not None:
@@ -129,6 +133,8 @@ def run_debug(source: Path, settings: Settings, views: list[str], outdir: Path,
                 writers[view].write(render(analysis))
             rows.append(_metrics_row(analysis))
             states.extend(analysis.states())
+            if index in perception_frames:
+                perception_analyses[index] = analysis
             if on_progress:
                 for event in analysis.events:
                     on_progress(f"    {event}")
@@ -146,11 +152,20 @@ def run_debug(source: Path, settings: Settings, views: list[str], outdir: Path,
                 outdir / "debug_events.csv", EVENT_FIELDS)
 
     summary = summarise(label or Path(source).stem, rows, pipeline.log)
+    perception_path = None
     if truth is not None:
         summary.score = score_events(truth, pipeline.log)
+        if truth.perception:
+            summary.perception_score = score_perception(
+                truth.perception, perception_analyses, truth.acceptance)
+            perception_path = outdir / "debug_perception.csv"
+            write_named([row.as_row() for row in summary.perception_score.measurements],
+                        perception_path, PERCEPTION_FIELDS)
     summary.outputs = [writers[name].path for name in views] + [
         outdir / "debug_metrics.csv", outdir / "debug_states.csv",
         outdir / "debug_events.csv"]
+    if perception_path is not None:
+        summary.outputs.append(perception_path)
     (outdir / "summary.txt").write_text(summary.as_text(), encoding="utf-8")
     return summary
 

@@ -39,7 +39,7 @@ confident_after: 8
 #
 #  Wo die Struktur wirklich steht, hilft es (lane_departure_1_lane: Flackern
 #  8 % -> 2 %, Spurliste 42 % -> 44 %). Deshalb einschaltbar je Aufnahme --
-#  in config/scenarios/<name>.yaml, nicht hier global.
+#  in configs/scenarios/<name>.yaml, nicht hier global.
 # ============================================================================
 stabilize: false
 

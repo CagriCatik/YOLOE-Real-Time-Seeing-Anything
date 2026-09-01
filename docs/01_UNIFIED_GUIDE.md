@@ -112,13 +112,13 @@ selected step numbers.
 | `cli/extract.py` | Extract video frames |
 | `cli/roi_editor.py` | Edit lane polygons |
 | `cli/crop_selector.py` | Edit frame crop box |
-| `cli/crop.py` | Batch crop frames using `config/detection.yaml` |
+| `cli/crop.py` | Batch crop frames using `configs/detection.yaml` |
 | `adascope/analysis.py` | Run YOLOE detection and lane-status analysis |
 | `cli/assemble.py` | Build a video from frames |
 
 ## Configuration
 
-All tunable runtime values live in `config/detection.yaml`.
+All tunable runtime values live in `configs/detection.yaml`.
 
 Important fields:
 

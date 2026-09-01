@@ -1,0 +1,200 @@
+# ============================================================================
+#  YOLOE-Detektion: Modell, ROIs, Carpet, Driving-Area, HUD
+#  Geladen von yoloe_lane.config.DetectionConfig  (yoloe-lane detect)
+# ----------------------------------------------------------------------------
+#  Coordinate system
+#    * All ROI points are [x, y] as FRACTIONS of the frame (0.0-1.0):
+#        x = 0.0 left edge ... 1.0 right edge
+#        y = 0.0 top edge  ... 1.0 bottom edge
+#      Because they are fractions, the same values work at any resolution
+#      (the 360p and 1080p downloads both use these numbers).
+#    * Colours are BGR triples (blue, green, red), 0-255 â€” OpenCV order.
+#    * HSV ranges use the OpenCV convention: H 0-179, S 0-255, V 0-255.
+#
+#  Every value below can also be overridden on the command line:
+#      --model / --classes / --conf / --config-dir
+# ============================================================================
+
+# ---- Model ------------------------------------------------------------------
+model:
+  checkpoint: models/yoloe-11l-seg.pt   # YOLOE weights file (swap for -pf, -26l, etc.)
+  classes: [car, truck]          # text prompts for OTHER vehicles to detect;
+                                 #   widen further with e.g. [car, truck, bus, van]
+  conf: 0.1                      # detection confidence 0-1; lower = more boxes
+                                 #   (more recall, more false positives)
+
+# ---- Ego vehicle exclusion zone --------------------------------------------
+# The ego car glyph sits in the lower-centre of the scene every frame. Any
+# detection whose box centre falls inside this normalized [x0,y0,x1,y1] region
+# is treated as the EGO vehicle and is NOT counted (ego is ego; only other
+# vehicles matter). Tune with the same fraction convention as the ROIs.
+ego_box: [0.42, 0.30, 0.60, 0.58]
+
+# ---- Lane regions of interest (perspective polygons) ------------------------
+# Each ROI is a list of [x, y] points walked in order (a closed polygon that
+# follows the lane in 3D perspective). A detected vehicle is assigned to the
+# first ROI whose polygon contains its box centre. Order matters on overlap
+# (left is tested first, then ego, then right).
+# Tuning tip: dump a frame, eyeball the lane, nudge the 4 corner points.
+#   - top two points sit near the vanishing point (small x-spread, small y)
+#   - bottom two points sit at the wide near edge (large x-spread, larger y)
+rois:
+  left: [[0.4516, 0.2648], [0.4802, 0.2648], [0.4432, 0.4917], [0.3339, 0.4917]]
+  ego: [[0.4729, 0.3102], [0.5172, 0.3102], [0.5448, 0.4667], [0.4474, 0.4676]]
+  right: [[0.5099, 0.2639], [0.538, 0.2639], [0.6552, 0.488], [0.549, 0.488]]
+
+# ---- Drawing colours (BGR) --------------------------------------------------
+# One entry per ROI name above. Used for the polygon outline, its count label,
+# and the boxes of vehicles assigned to that ROI.
+roi_colors:
+  left:  [255, 180, 0]     # blue-ish
+  ego:   [255, 255, 255]   # white
+  right: [0, 180, 255]     # orange
+
+# ---- Crop box (for cropping frames) ----------------------------------------
+# Normalized coordinates (0..1) for the crop region: [x0, y0, x1, y1]
+# Interaktiv anpassen mit: yoloe-lane crop-box
+crop_box: [0.1271, 0.1759, 0.8688, 0.6704]
+
+# ---- Driving-area "carpet" detection ----------------------------------------
+# The coloured lane overlay (green = lane change available/clear,
+# red = blocked/aborted, white = adjacent lane highlighted). Detected purely by
+# HSV colour thresholding INSIDE each lane polygon â€” no model needed.
+carpet:
+  detect_in: [left, ego, right]   # which ROIs to test for a carpet colour
+                             #   (ego included so the white "drivable" path is read)
+  min_frac: 0.04             # green/red must fill >= this fraction of the
+                             #   polygon to count (raise if it flickers,
+                             #   lower if a faint carpet is missed)
+  white_min_frac: 0.18       # white needs a higher fraction than green/red,
+                             #   because bright lane markings are also white;
+                             #   green/red always win over white when both pass
+  # HSV colour gates [ [Hmin,Smin,Vmin], [Hmax,Smax,Vmax] ]:
+  green_hsv: [[38, 70, 70], [90, 255, 255]]
+  red_hsv:                   # red wraps the hue circle, so it needs two ranges
+    - [[0, 90, 80], [12, 255, 255]]
+    - [[168, 90, 80], [180, 255, 255]]
+  white_hsv: [[0, 0, 95], [179, 45, 170]]   # low saturation, mid brightness
+
+# ---- Driving-area detection via YOLO-E (ROI-free) ----------------------------
+# The carpet is detected purely by YOLOE open-vocabulary prompts - no ROI
+# polygons. The carpet swoosh is anchored at the ego car and extends into the
+# target lane, so the lane is read from the detection's geometry: the swoosh
+# tip (segmentation-mask far end) left/centred/right of the ego car's centre.
+# Per-run override: yoloe-lane detect --area-mode yoloe|hsv
+driving_area:
+  enabled: true              # YOLOE is the driving-area backend (hsv = legacy)
+  conf: 0.03                 # the synthetic cluster graphics score low - keep small;
+                             #   junk whole-scene matches are filtered below
+  max_box_frac: 0.5          # ignore detections covering > this fraction of the
+                             #   frame (whole-scene matches are never a carpet)
+  side_dead_zone: 0.02       # tip within this fraction of frame width from the
+                             #   ego centre counts as the ego lane
+  # Rangfolge der Farben bei Mehrfachtreffern in derselben Spur: der HINTERE
+  # Eintrag gewinnt. Wer eine Farbe ergaenzt, traegt sie hier UND unter prompts
+  # ein -- eine Farbe ohne Rangfolge ist ein Ladefehler, kein stiller Ausfall.
+  priority: [white, gray, green, red]
+
+  prompts:                   # Farbe -> YOLOE-Textprompts (frei anpassbar;
+    green:                   #   kurze Nominalphrasen treffen diese Grafiken am besten)
+      - green road
+      - green area on the road
+    red:
+      - red road
+      - red area on the road
+    white:
+      - white driving path on the road
+    gray:                    # nicht freigegebener Fahrbahnbereich
+      # GEMESSEN auf test_frame_arrow.png gegen die per Helligkeit ermittelte
+      # Zielflaeche (x 267..483, y 178..300, 2.2 % des Bildes):
+      #   gray trapezoid on the road   conf 0.019  IoU 0.82  Flaeche 0.056  <-- trifft
+      #   gray road area               conf 0.007  IoU 0.26  Flaeche 0.186
+      #   gray overlay on the lane     conf 0.007  IoU 0.07  Flaeche 0.671  Ganzbild
+      #   gray patch/shape/polygon/area on the road, shaded area,
+      #   highlighted lane area, driving area, lane highlight -> kein Treffer
+      #
+      # Der Wirkstoff ist das FORMWORT, nicht die Farbe: "trapezoid" trifft,
+      # "area", "patch", "shape", "polygon" nicht. Auf drei Frames geprueft ist
+      # es der einzige Prompt, der ueberall feuert.
+      #
+      # ABER: 0.019 liegt UNTER driving_area.conf (0.03). Wer diesen Prompt
+      # nutzen will, muss conf senken -- und faengt sich damit mehr Ganzbild-
+      # treffer ein, die max_box_frac wegfiltern muss. Fuer flaechige Farben
+      # ist die HSV-Schwelle unter `carpet:` der zuverlaessigere Weg;
+      # YOLOE traegt hier nur, wenn ein Formwort passt.
+      - gray trapezoid on the road
+      - gray road area
+
+# ---- HUD icons, warning lamps & pop-ups via YOLO-E ---------------------------
+# Open-vocabulary prompts for the cluster's UI elements (written against the
+# Audi assisted-lane-change footage). Each element name becomes a hud_<name>
+# 0/1 column in states.csv and a labelled yellow box in the debug video.
+# Add or remove elements freely - no code changes needed.
+# Toggle here or per run: yoloe-lane detect --hud on|off
+hud:
+  enabled: false             # false = skip HUD detection (default behaviour)
+  conf: 0.15                 # confidence threshold for the HUD prompts
+  prompts:
+    takeover_request:        # "Bitte uebernehmen!" banner, top of screen
+      - yellow steering wheel warning icon
+      - take over request banner with steering wheel symbol
+    warning_popup:           # dark message panel, e.g. "assistierter Spurwechsel abgebrochen"
+      - dark popup notification box with warning text
+      - driver assistance warning message panel
+    lane_assist_warning:     # red car-between-lanes icon inside the pop-up
+      - red car between lane lines warning icon
+      - red lane departure warning symbol
+    speed_limit_sign:        # round "90" sign with red ring and exclamation mark
+      - round speed limit traffic sign with red ring
+      - speed limit sign with exclamation mark
+    acc_indicator:           # green following-distance icon with set speed below
+      - green adaptive cruise control distance icon
+      - green car following distance symbol with set speed
+    lane_change_arrow:       # small green triangles left/right of the ego car
+      - small green triangle arrow beside the car
+      - green lane change indicator arrow
+    sensor_arc:              # green radar fan above the ego car
+      - green radar sensor arc …604 tokens truncated…=======================================================================
+#  Temporale Ereignisableitung: Cut-In / Cut-Out
+#  Geladen von yoloe_lane.config.EventConfig -> yoloe_lane.lanes.events
+# ----------------------------------------------------------------------------
+#  Ein Schwellwert liefert pro Frame eine Aussage, aber kein EREIGNIS. Drei
+#  Faelle unterscheidet er nicht, die State Machine schon:
+#    1. ABGEBROCHENER Spurwechsel - driftet zur Linie und kehrt zurueck.
+#    2. FLACKERN um die Schwelle - entprellt ueber confirm_frames.
+#    3. EIGENER Spurwechsel - verschiebt die relative Nummer JEDES Tracks
+#       gleichzeitig; pro Fahrzeug sieht das wie ein Cut-In aus.
+#
+#  Die State Machine repariert KEINE schlechten Messungen. Unplausible
+#  Footprints (siehe bev.fp_width_*) werden davor ausgefiltert, nicht darin.
+# ============================================================================
+
+# ---- Zustandsschwellen (Anteil der Fahrzeugbreite in der Ego-Spur) ----------
+thr_encroaching: 0.10   # outside -> encroaching
+thr_inside: 0.50        # encroaching -> inside
+
+# ---- Entprellung -------------------------------------------------------------
+confirm_frames: 3   # so viele Frames in Folge, bevor ein Zustand uebernommen
+                    #   wird. Hoeher = traeger, aber weniger Ereignissalven.
+max_missing: 5      # Frames ohne Messung, nach denen ein Track verworfen wird
+
+# ---- Szenenebene: eigener Spurwechsel ---------------------------------------
+# Verschieben sich mindestens so viele Tracks gleichsinnig, gilt das als
+# eigener Spurwechsel und die Fahrzeugereignisse werden unterdrueckt.
+#
+# GRENZE DIESES ANSATZES: er braucht mehrere sichtbare Fremdfahrzeuge. Auf
+# Material, in dem meist nur eines im Bild ist, kann die Szenenebene nie
+# greifen. Der eigene Spurwechsel muesste dort aus der Bewegung der Spurgrenzen
+# relativ zum Ego-Footprint abgeleitet werden.
+ego_shift_min_tracks: 2
+ego_refractory_frames: 6   # Nachlauffenster; ohne das leckt ein falscher
+                           #   cut_in durch, sobald sich die Relativnummer nach
+                           #   dem eigenen Wechsel stabilisiert hat
+
+# ---- Beleg fuer den eigenen Spurwechsel --------------------------------------
+# Die Szenenebene oben stuetzt sich auf Fremdfahrzeuge. Zwei gleichzeitig
+# gleichsinnig wechselnde Fahrzeuge sehen davon aus wie ein eigener Wechsel --
+# und die Unterdrueckung loescht dann genau deren echte Ereignisse. Deshalb muss
+# der Ego-Footprint dabei auch wirklich seine Spurgrenze beruehren.
+# 1.0 schaltet den Beleg ab.
+ego_departure_max: 0.90

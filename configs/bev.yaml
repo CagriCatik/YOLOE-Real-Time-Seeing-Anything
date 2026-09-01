@@ -25,6 +25,13 @@ x_right: 419
 y_near: 690
 y_far: 20
 
+# ---- Auswahl der Richtungsfahrbahn ------------------------------------------
+# Liegen auf einer Seite mehrere durchgezogene Linien, kann die aeusserste zur
+# Gegenfahrbahn gehoeren. Die naechste durchgezogene Nicht-Ego-Linie begrenzt
+# die Fahrbahnen dieses HMI-Bildes korrekt. `outermost` aktiviert bei Bedarf
+# das historische Verhalten.
+boundary_pair_strategy: nearest_continuous
+
 # ---- Spurfindung im Spaltenhistogramm ---------------------------------------
 peak_min_pixels: 10     # Mindesthoehe einer Saeule, damit sie als Grenze zaehlt
 peak_min_distance: 55   # Mindestabstand zweier Peaks.

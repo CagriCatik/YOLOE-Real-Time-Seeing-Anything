@@ -42,7 +42,7 @@
 #  Deshalb ist `histogram` der Standard und die Umstellung eine
 #  Einzelfallentscheidung je Aufnahme:
 #
-#      # config/scenarios/<name>.yaml
+#      # configs/scenarios/<name>.yaml
 #      windows:
 #        method: windows
 #

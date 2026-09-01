@@ -52,7 +52,7 @@ tool/       optionale PyQt6-Werkzeuge (Extra `[gui]`)
 Jede Schicht kennt nur die inneren. Domänencode importiert weder `ultralytics`
 noch `argparse` und schreibt keine Dateien.
 
-**Eine Config-Datei je Domäne, Defaults im Code.** `config/lane.yaml`,
+**Eine Config-Datei je Domäne, Defaults im Code.** `configs/lane.yaml`,
 `bev.yaml`, `tracking.yaml`, `indexing.yaml`, `events.yaml`, `pipeline.yaml`,
 `debug.yaml`, `detection.yaml`. Eine Datei entspricht genau einer Dataclass.
 Drei Regeln:
@@ -63,7 +63,7 @@ Drei Regeln:
 3. Validiert wird **beim Laden, einmal**; danach sind die Objekte frozen. Ein
    unbekannter Schlüssel ist ein Fehler, kein stilles Ignorieren.
 
-**Szenarien als Overlay.** `config/scenarios/<name>.yaml` enthält je Domänen-
+**Szenarien als Overlay.** `configs/scenarios/<name>.yaml` enthält je Domänen-
 Sektion ausschließlich Abweichungen und wird über die Basis gemischt. Damit
 beschreibt eine Datei eine Aufnahmesituation vollständig, ohne die
 Basiskalibrierung zu kopieren.

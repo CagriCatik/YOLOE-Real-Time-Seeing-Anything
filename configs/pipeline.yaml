@@ -24,3 +24,12 @@ road_margin: 25
 # um lane.ego_x_bottom herum.
 ego_fallback_half_width: 45
 ego_fallback_height: 60
+
+# ---- Temporale Homographie-Plausibilitaet ----------------------------------
+homography_smoothing: 0.75
+homography_max_point_jump: 90.0       # groesste Eckpunktbewegung je Frame [px]
+homography_max_width_change_ratio: 0.25
+homography_max_vanishing_jump: 160.0  # Bewegung des Fluchtpunkts [px]
+homography_max_top_width_ratio: 0.80  # Fernbreite muss kleiner als Nahbreite sein
+homography_min_pair_continuity: 0.45
+homography_min_pair_support: 2

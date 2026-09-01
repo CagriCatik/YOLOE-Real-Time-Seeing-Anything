@@ -7,7 +7,7 @@ Pipeline (rein funktional, Seiteneffekte nur beim Rendern/IO):
          ─▶ 2D-Clustering (x_bottom, Steigung) ─▶ Liniennfit x = m·y + b
          ─▶ Rollenzuordnung (links/ego/rechts) ─▶ Overlay
 
-Die gesamte Kalibrierung steckt in `LaneConfig` (config/lane.yaml). Für die
+Die gesamte Kalibrierung steckt in `LaneConfig` (configs/lane.yaml). Für die
 Portierung auf ein anderes Fahrzeugprojekt wird nur diese Datei ausgetauscht,
 der Pipeline-Code bleibt unverändert.
 
@@ -35,6 +35,13 @@ class LaneLine:
     x_bottom: float
     support: int
     role: Role = "unknown"
+    # GEMESSENE Durchgezogenheit: Anteil der y-Spanne, den die Segmente des
+    # Clusters tatsaechlich abdecken. 1.0 = luekenlos, kleine Werte = Striche.
+    #
+    # Bis hierher waren `solid` und `dashed` reine POSITIONSANGABEN -- keine
+    # Stufe hat je geprueft, ob eine Linie durchgezogen ist. Das sah wie eine
+    # Messung aus und war keine.
+    continuity: float = 1.0
 
     def x_at(self, y: float) -> int:
         return int(self.m * y + self.b)
@@ -60,7 +67,7 @@ def build_masked_edges(img: np.ndarray, cfg: LaneConfig) -> np.ndarray:
     cv2.fillPoly(roi, [np.array(cfg.roi_polygon, np.int32)], 255)
 
     masked = cv2.bitwise_and(white, roi)
-    return cv2.Canny(masked, 50, 150)
+    return cv2.Canny(masked, cfg.canny_low, cfg.canny_high)
 
 
 # --------------------------------------------------------------------------- #
@@ -92,7 +99,8 @@ def extract_segments(edges: np.ndarray, cfg: LaneConfig) -> list[tuple]:
 # --------------------------------------------------------------------------- #
 # Stage 3 – Clustering in (x_bottom, Steigung)                                #
 # --------------------------------------------------------------------------- #
-def cluster_segments(segments: list[tuple], cfg: LaneConfig) -> list[list[tuple]]:
+def _greedy_clusters(segments: list[tuple], cfg: LaneConfig) -> list[list[tuple]]:
+    """Historisches Verfahren fuer reproduzierbare A/B-Vergleiche."""
     if not segments:
         return []
     segments = sorted(segments, key=lambda s: s[0])
@@ -105,6 +113,97 @@ def cluster_segments(segments: list[tuple], cfg: LaneConfig) -> list[list[tuple]
         else:
             clusters.append([seg])
     return clusters
+
+
+def _segment_model(segment: tuple) -> tuple[float, float, float, float]:
+    """(m, b, y_min, y_max) fuer ``x = m*y + b``."""
+    _, m, (x1, y1, _x2, y2) = segment
+    b = float(x1) - float(m) * float(y1)
+    return float(m), b, float(min(y1, y2)), float(max(y1, y2))
+
+
+def segment_incompatibility(a: tuple, b: tuple, cfg: LaneConfig) -> str:
+    """Leerer String bei Kompatibilitaet, sonst der erste Ablehnungsgrund.
+
+    Neben Steigung und ``x_bottom`` werden der lokale Querabstand, die
+    vertikale Luecke und die Projektion bei ``y_top`` geprueft. Letztere ist
+    die Fluchtpunkt-Kompatibilitaet: lokal aneinanderstossende Segmente, die in
+    unterschiedliche Fernrichtungen zeigen, bilden keinen Bruecken-Cluster.
+    """
+    if (a[0] < cfg.ego_x_bottom) != (b[0] < cfg.ego_x_bottom):
+        return "side"
+    ma, ba, alo, ahi = _segment_model(a)
+    mb, bb, blo, bhi = _segment_model(b)
+    if abs(ma - mb) > cfg.cluster_max_slope_diff:
+        return "slope"
+    if abs(float(a[0]) - float(b[0])) > cfg.cluster_max_dist:
+        return "bottom_projection"
+    top_a, top_b = ma * cfg.y_top + ba, mb * cfg.y_top + bb
+    top_points = sorted(cfg.roi_polygon, key=lambda point: point[1])[:2]
+    vanishing_x = sum(point[0] for point in top_points) / len(top_points)
+    if (cfg.cluster_vanishing_x_tolerance > 0
+            and (abs(top_a - vanishing_x) > cfg.cluster_vanishing_x_tolerance
+                 or abs(top_b - vanishing_x) > cfg.cluster_vanishing_x_tolerance)):
+        return "vanishing_region"
+    if abs(top_a - top_b) > cfg.cluster_max_top_dist:
+        return "vanishing_projection"
+
+    overlap_lo, overlap_hi = max(alo, blo), min(ahi, bhi)
+    if overlap_lo <= overlap_hi:
+        y_probe, y_gap = (overlap_lo + overlap_hi) / 2.0, 0.0
+    elif ahi < blo:
+        y_probe, y_gap = (ahi + blo) / 2.0, blo - ahi
+    else:
+        y_probe, y_gap = (bhi + alo) / 2.0, alo - bhi
+    if y_gap > cfg.cluster_max_y_gap:
+        return "vertical_gap"
+    lateral = abs((ma * y_probe + ba) - (mb * y_probe + bb))
+    return "" if lateral <= cfg.cluster_max_lateral_gap else "lateral_gap"
+
+
+def segments_compatible(a: tuple, b: tuple, cfg: LaneConfig) -> bool:
+    """Ob zwei Hough-Segmente dieselbe physische Markierung beschreiben."""
+    return not segment_incompatibility(a, b, cfg)
+
+
+def _union_find_clusters(segments: list[tuple], cfg: LaneConfig) -> list[list[tuple]]:
+    """Deterministische Zusammenhangskomponenten kompatibler Segmente."""
+    if not segments:
+        return []
+    ordered = sorted(segments, key=lambda s: (float(s[0]), float(s[1]), tuple(s[2])))
+    parent = list(range(len(ordered)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[max(ri, rj)] = min(ri, rj)
+
+    for i, first in enumerate(ordered):
+        for j in range(i + 1, len(ordered)):
+            second = ordered[j]
+            if second[0] - first[0] > cfg.cluster_max_dist:
+                break
+            if segments_compatible(first, second, cfg):
+                union(i, j)
+
+    grouped: dict[int, list[tuple]] = {}
+    for i, segment in enumerate(ordered):
+        grouped.setdefault(find(i), []).append(segment)
+    return sorted(grouped.values(),
+                  key=lambda group: float(np.median([s[0] for s in group])))
+
+
+def cluster_segments(segments: list[tuple], cfg: LaneConfig) -> list[list[tuple]]:
+    """Cluster mit konfigurierbarem, standardmaessig deterministischem Verfahren."""
+    if cfg.cluster_method == "greedy":
+        return _greedy_clusters(segments, cfg)
+    return _union_find_clusters(segments, cfg)
 
 
 # --------------------------------------------------------------------------- #
@@ -129,6 +228,32 @@ def robust_line(pts: np.ndarray, cfg: LaneConfig) -> tuple[float, float]:
     return float(m), float(b)
 
 
+def measure_continuity(cluster: list[tuple]) -> float:
+    """Anteil der y-Spanne eines Clusters, der von Segmenten belegt ist.
+
+    Eine durchgezogene Linie deckt ihre Spanne nahezu vollstaendig ab, eine
+    gestrichelte laesst Luecken. Das ist der Unterschied, den die Rollennamen
+    bisher behauptet, aber nie gemessen haben.
+    """
+    # Index 1 und 3 sind die y-Koordinaten; das Segment ist (x1, y1, x2, y2).
+    # Zuerst standen hier 0 und 2 -- damit wurde die x-Spanne gemessen und die
+    # Durchgezogenheit kam praktisch immer als 1.00 heraus.
+    spans = sorted((min(seg[1], seg[3]), max(seg[1], seg[3]))
+                   for _, _, seg in cluster)
+    if not spans:
+        return 0.0
+    gesamt = spans[-1][1] - spans[0][0]
+    if gesamt <= 0:
+        return 1.0
+    belegt, ende = 0.0, spans[0][0]
+    for lo, hi in spans:                       # ueberlappende Segmente vereinen
+        if hi <= ende:
+            continue
+        belegt += hi - max(lo, ende)
+        ende = hi
+    return min(belegt / gesamt, 1.0)
+
+
 def fit_lanes(clusters: list[list[tuple]], cfg: LaneConfig) -> list[LaneLine]:
     lanes: list[LaneLine] = []
     for cluster in clusters:
@@ -140,8 +265,51 @@ def fit_lanes(clusters: list[list[tuple]], cfg: LaneConfig) -> list[LaneLine]:
         )
         m, b = robust_line(pts, cfg)                   # x = m·y + b
         lanes.append(LaneLine(m=m, b=b, x_bottom=m * cfg.y_bottom + b,
-                              support=len(cluster)))
+                              support=len(cluster),
+                              continuity=measure_continuity(cluster)))
     return sorted(lanes, key=lambda L: L.x_bottom)
+
+
+# --------------------------------------------------------------------------- #
+# Stage 4b - Geometrisch unmoegliche Linien verwerfen                          #
+# --------------------------------------------------------------------------- #
+def drop_crossing_lines(lanes: list[LaneLine], cfg: LaneConfig) -> list[LaneLine]:
+    """Linien entfernen, die sich innerhalb der ROI schneiden.
+
+    Zwei Spurgrenzen kreuzen sich nicht. Tun zwei gefittete Linien es doch, ist
+    mindestens eine keine Markierung -- in HMI-Aufnahmen typischerweise die
+    Trapezkante der Darstellung selbst, die diagonal durchs Bild laeuft.
+
+    Genau das war im Debugvideo zu sehen: eine als `right_solid` gefuehrte Linie
+    verlief von oben Mitte quer durch das Ego-Fahrzeug nach unten links und
+    kreuzte dabei alle anderen. Weil `right_solid` positionell "am weitesten
+    aussen" heisst, gewann ausgerechnet sie die Rolle -- und wurde Stuetzpunkt
+    der Homographie.
+
+    Aufloesung nach Support: die Linie mit den wenigeren Clustersegmenten
+    fliegt. Eine echte Markierung hat mehr Belege als eine Bildkante, die nur
+    an wenigen Stellen als hell durchgeht.
+    """
+    if len(lanes) < 2:
+        return lanes
+    y0, y1 = float(cfg.y_top), float(cfg.y_bottom)
+    konflikte: dict[int, int] = {}
+    for i, a in enumerate(lanes):
+        for j in range(i + 1, len(lanes)):
+            b = lanes[j]
+            oben = a.m * y0 + a.b - (b.m * y0 + b.b)
+            unten = a.m * y1 + a.b - (b.m * y1 + b.b)
+            if oben == 0.0 or unten == 0.0 or (oben < 0) != (unten < 0):
+                konflikte[i] = konflikte.get(i, 0) + 1
+                konflikte[j] = konflikte.get(j, 0) + 1
+    if not konflikte:
+        return lanes
+    # Wiederholt die schlechteste Linie entfernen, bis nichts mehr kreuzt.
+    # Ein einzelner Durchgang genuegt nicht: eine Diagonale kreuzt mehrere,
+    # und nach ihrem Entfernen sind die uebrigen wieder in Ordnung.
+    schlechteste = min(konflikte, key=lambda i: (lanes[i].support, -konflikte[i]))
+    rest = [L for k, L in enumerate(lanes) if k != schlechteste]
+    return drop_crossing_lines(rest, cfg)
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +340,8 @@ def detect_lanes(img: np.ndarray, cfg: LaneConfig = LaneConfig()) -> LaneResult:
     segments = extract_segments(edges, cfg)
     clusters = cluster_segments(segments, cfg)
     lanes = fit_lanes(clusters, cfg)
+    lanes = drop_crossing_lines(lanes, cfg)
     result = classify_lanes(lanes, cfg)
-    result.debug = {"n_segments": len(segments), "n_clusters": len(clusters)}
+    result.debug = {"n_segments": len(segments), "n_clusters": len(clusters),
+                    "cluster_method": cfg.cluster_method}
     return result

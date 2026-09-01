@@ -11,7 +11,7 @@ Je Szenario entsteht `results/<name>/` mit allen Debug-Videos, den CSVs und
 einer `summary.txt`. Darueber liegt `results/index.md` mit einer Vergleichs-
 tabelle ueber alle Laeufe -- der Regressionsblick.
 
-Findet sich `config/scenarios/<name>.yaml`, wird sie automatisch als
+Findet sich `configs/scenarios/<name>.yaml`, wird sie automatisch als
 Kalibrier-Ueberlagerung verwendet; sonst gilt die Basiskalibrierung.
 """
 
@@ -71,7 +71,7 @@ def run(args: argparse.Namespace) -> int:
     for number, scenario in enumerate(scenarios, 1):
         settings = scenario.settings(args.config_dir)
         outdir = scenario.result_dir(args.results)
-        overlay = f"config/scenarios/{scenario.name}.yaml" if scenario.config_overlay \
+        overlay = f"configs/scenarios/{scenario.name}.yaml" if scenario.config_overlay \
             else "Basiskalibrierung"
         print(f"\n[{number}/{len(scenarios)}] {scenario.name}")
         print(f"    Quelle  {scenario.source}")
@@ -103,7 +103,9 @@ def run(args: argparse.Namespace) -> int:
     print(f"Vergleichstabelle: {index}")
     # Rueckgabewert taugt damit als Testergebnis: 0 nur, wenn nichts
     # gescheitert ist UND jede vorhandene Annotation erfuellt wurde.
-    failed = [s for s in summaries if s.error or (s.score and not s.score.perfect)]
+    failed = [s for s in summaries
+              if s.error or (s.score and not s.score.perfect)
+              or (s.perception_score and not s.perception_score.perfect)]
     if failed:
         print(f"\n{len(failed)} von {len(summaries)} Szenario(s) nicht in Ordnung: "
               + ", ".join(s.scenario for s in failed))
@@ -120,7 +122,7 @@ def _list(found, scenario_dir: Path) -> int:
               "Erwartet wird dort eine Videodatei (.mp4, .mov, .avi, .mkv, .webm)\n"
               "oder ein Ordner mit Bildern. Der Dateiname ist der Szenarioname:\n\n"
               f"    {scenario_dir}/mein_szenario.mp4\n"
-              "    config/scenarios/mein_szenario.yaml   (optional: Abweichungen)\n"
+              "    configs/scenarios/mein_szenario.yaml   (optional: Abweichungen)\n"
               "    results/mein_szenario/                (entsteht beim Lauf)")
         return 1
     print(f"{len(found)} Szenario(s) in {scenario_dir}/:\n")
@@ -152,5 +154,7 @@ def _index_markdown(summaries: list[RunSummary], args: argparse.Namespace) -> st
         "- **Ego min** — kleinster Anteil des Ego-Footprints in der eigenen Spur.\n"
         "  Unter 1.00 beruehrt oder ueberschreitet das Ego die Spurgrenze.\n"
         "- **Ereignisse** — was die State Machine gemeldet hat.\n"
+        "- **Wahrnehmung** — manuelle Frame-Ground-Truth fuer Richtungsflaeche, "
+        "Grenzen, Spurzahl und Zuordnungen. Nicht annotierte Werte bleiben N/A.\n"
         "\nDetails je Lauf in `<szenario>/summary.txt`, Rohdaten in\n"
         "`<szenario>/debug_metrics.csv`.\n")

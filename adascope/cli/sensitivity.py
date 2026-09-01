@@ -19,6 +19,7 @@ from ..io import read_image
 from ..lanes import (
     assign_lane, build_lane_mask, corridors_from, detect_lanes, find_lane_boundaries,
     footprint_is_plausible, homography_from_pair, outer_solid_pair, project_footprint,
+    restrict_to_driving_area, source_points, warp_lane_mask,
 )
 from ..lanes.indexing import build_lane_index
 from ._common import add_config_args, load_settings
@@ -49,6 +50,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("keine zwei durchgezogenen Randlinien im Referenzbild")
     boxes = [EGO_BOX, *OTHER_BOXES.values()]
     mask = build_lane_mask(image, lane, boxes)
+    mask = restrict_to_driving_area(mask, source_points(pair, lane))
     H = homography_from_pair(pair, lane, bev)
 
     _homography_noise(pair, mask, settings, args.trials)
@@ -81,7 +83,7 @@ def _homography_noise(pair, mask, settings, trials: int) -> None:
                 [ls.x_at(lane.y_top) + n[3], lane.y_top],
             ])
             H = cv2.getPerspectiveTransform(src, dst)
-            warped = cv2.warpPerspective(mask, H, (bev.width, bev.height))
+            warped = warp_lane_mask(mask, H, bev)
             corridors = corridors_from(find_lane_boundaries(warped, bev))
             counts.add(len(corridors))
             if len(corridors) >= 3:
@@ -102,7 +104,7 @@ def _boundary_dropout(mask, H, settings) -> None:
     for cut in (0, 60, 120, 180, 240):
         cropped = mask.copy()
         cropped[:cut, :] = 0
-        warped = cv2.warpPerspective(cropped, H, (bev.width, bev.height))
+        warped = warp_lane_mask(cropped, H, bev)
         boundaries = find_lane_boundaries(warped, bev)
         corridors = corridors_from(boundaries)
         ego_fp = project_footprint("ego", EGO_BOX, H)
@@ -125,7 +127,7 @@ def _footprint_widths(mask, H, settings) -> None:
     Detektionsreichweite.
     """
     bev, indexing = settings.bev, settings.indexing
-    warped = cv2.warpPerspective(mask, H, (bev.width, bev.height))
+    warped = warp_lane_mask(mask, H, bev)
     corridors = corridors_from(find_lane_boundaries(warped, bev))
     ego_fp = project_footprint("ego", EGO_BOX, H)
     _, lane_width = build_lane_index(corridors, ego_fp.x_left, ego_fp.x_right, indexing)

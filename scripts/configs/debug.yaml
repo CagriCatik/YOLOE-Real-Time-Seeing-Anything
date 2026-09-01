@@ -1,0 +1,82 @@
+# ============================================================================
+#  Debug-Ansichten: virtuelle Kameras, Farben, Layout
+#  Geladen von yoloe_lane.config.DebugConfig -> yoloe_lane.render.debug_views
+# ----------------------------------------------------------------------------
+#  Die virtuellen Kameras sind KEINE neuen Messungen. Die Bodenebene ist durch
+#  die Homographie bereits festgelegt; jede weitere Ansicht davon ist wieder
+#  eine Homographie und kostet einen zusaetzlichen warpPerspective. Eine neue
+#  Perspektive entsteht deshalb durch einen Eintrag hier, nicht durch Code:
+#  danach ist sie ueber `yoloe-lane lane-debug --views <name>` verfuegbar.
+# ============================================================================
+
+# ---- Virtuelle Kameras auf die BEV-Bodenebene --------------------------------
+# Alle Laengen in BEV-Pixeln (siehe bev.yaml width/height).
+#   x          laterale Kameraposition in BEV-x
+#   behind     Abstand hinter der BEV-Unterkante
+#   elevation  Hoehe ueber der Bodenebene
+#   pitch_deg  >0 = nach unten geneigt
+#   yaw_deg    >0 = nach rechts gedreht
+#   cy_ratio   Hauptpunkt-Hoehe; kleiner schiebt den Horizont nach oben und
+#              spart tote schwarze Flaeche darueber
+cameras:
+  oblique:              # Schraegkamera hinter dem Ego, Standardansicht
+    width: 900
+    height: 560
+    x: 250.0
+    behind: 240.0
+    elevation: 190.0
+    pitch_deg: 24.0
+    yaw_deg: 0.0
+    focal: 620.0
+    cy_ratio: 0.5
+
+  shoulder:             # Blick vom rechten Standstreifen; macht Laengsversatz
+    width: 900          #   und Spurhaltung des Ego sichtbar
+    height: 460
+    x: 400.0
+    behind: 300.0
+    elevation: 180.0
+    pitch_deg: 15.0
+    yaw_deg: -9.0
+    focal: 850.0
+    cy_ratio: 0.34
+
+# ---- Komposit-Ansicht (dash) -------------------------------------------------
+# Kantenlaengen MUESSEN gerade sein: mp4v schneidet sonst stumm eine Zeile ab.
+# height ergibt sich aus front_height + panel_height + timeline_height.
+dashboard:
+  width: 1220
+  front_height: 461      # Bildebene, obere Reihe
+  panel_height: 480      # mittlere Reihe: bev | oblique | hist
+  timeline_height: 179   # Zeitverlauf unten
+  panel_splits: [366, 854]
+  ego_axis_min: 0.8      # untere Grenze der Spurhaltungs-Achse (1.0 = drin)
+
+# ---- Weitere Masse -----------------------------------------------------------
+hist_plot_height: 170          # Histogrammplot unter der BEV-Maske
+lane_width_m: 3.5              # reale Spurbreite, fuer die Bodenquader
+vehicle_height_m: 1.5          # angenommene Fahrzeughoehe der Quader
+fallback_lane_width_px: 76.0   # wenn keine Spurbreite gemessen werden konnte
+event_log_size: 5              # Ereignisse im Log der Bildebene
+
+# ---- Farben (BGR) ------------------------------------------------------------
+# Die Namen sind Zustaende und Rollen, keine Farbnamen - so bleibt die Bedeutung
+# stabil, wenn die Palette getauscht wird. Nur Abweichungen vom Default noetig.
+colors:
+  # Fahrzeugzustand der State Machine
+  state_outside: [0, 210, 0]
+  state_encroaching: [0, 200, 255]
+  state_inside: [0, 0, 255]
+  state_invalid: [150, 150, 150]
+  # Homographie-Zustand
+  homography_fresh: [0, 210, 0]
+  homography_held: [0, 190, 255]
+  homography_none: [0, 0, 235]
+  # Spurgrenzen: roh aus dem Histogramm / uebernommen / virtuell rekonstruiert
+  boundary_raw: [95, 95, 95]
+  boundary_lane: [255, 255, 255]
+  boundary_synthetic: [0, 170, 255]
+  # Ego: gelb solange vollstaendig in der Spur, orange sobald die Grenze
+  # beruehrt wird (Lane-Departure-Signal)
+  ego: [255, 255, 0]
+  ego_departing: [0, 170, 255]

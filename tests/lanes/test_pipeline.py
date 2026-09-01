@@ -75,6 +75,39 @@ def test_recovers_to_fresh_after_a_dropout():
     assert tracker.held_frames == 0
 
 
+def test_rejects_a_one_frame_support_point_jump_and_holds_previous_geometry():
+    tracker = HomographyTracker(LaneConfig(), BevConfig(), max_hold=3,
+                                max_point_jump=50)
+    fresh, _ = tracker.update(pair_result())
+    jumped = LaneResult(lines=[line(300, "left_solid"),
+                               line(1100, "right_solid")])
+    held, state = tracker.update(jumped)
+    assert state == "held"
+    assert tracker.last_rejection == "point_jump"
+    assert np.array_equal(held, fresh)
+
+
+def test_rejects_an_abrupt_width_change_even_when_points_are_allowed_to_move():
+    tracker = HomographyTracker(LaneConfig(), BevConfig(), max_hold=3,
+                                max_point_jump=500, max_width_change_ratio=0.10)
+    fresh, _ = tracker.update(pair_result())
+    narrower = LaneResult(lines=[line(100, "left_solid"),
+                                 line(700, "right_solid")])
+    held, state = tracker.update(narrower)
+    assert state == "held"
+    assert tracker.last_rejection == "width_jump"
+    assert np.array_equal(held, fresh)
+
+
+def test_accepts_a_gradual_boundary_motion_as_fresh():
+    tracker = HomographyTracker(LaneConfig(), BevConfig(), max_hold=3,
+                                max_point_jump=50, max_width_change_ratio=0.10)
+    tracker.update(pair_result())
+    moved = LaneResult(lines=[line(105, "left_solid"), line(905, "right_solid")])
+    assert tracker.update(moved)[1] == "fresh"
+    assert tracker.last_rejection == ""
+
+
 # --------------------------------------------------------------------------- #
 # Fahrbahnfilter                                                              #
 # --------------------------------------------------------------------------- #

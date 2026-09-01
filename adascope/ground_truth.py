@@ -30,6 +30,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config.loader import read_yaml
+from .perception_ground_truth import (
+    ExpectedPerceptionFrame, PerceptionAcceptance,
+)
 
 DEFAULT_GROUND_TRUTH_DIR = Path("ground_truth")
 DEFAULT_TOLERANCE = 8
@@ -58,6 +61,8 @@ class ExpectedEvent:
 class GroundTruth:
     events: tuple[ExpectedEvent, ...]
     tolerance: int = DEFAULT_TOLERANCE
+    perception: tuple[ExpectedPerceptionFrame, ...] = ()
+    acceptance: PerceptionAcceptance = field(default_factory=PerceptionAcceptance)
 
     @classmethod
     def load(cls, name: str, directory: str | Path = DEFAULT_GROUND_TRUTH_DIR
@@ -66,7 +71,7 @@ class GroundTruth:
         if not path.exists():
             return None
         raw = read_yaml(path)
-        unknown = set(raw) - {"events", "tolerance", "note"}
+        unknown = set(raw) - {"events", "tolerance", "note", "perception", "acceptance"}
         if unknown:
             raise ValueError(f"{path}: unbekannte Schluessel {sorted(unknown)}")
         events = []
@@ -84,8 +89,15 @@ class GroundTruth:
                                  f"{ANY_TRACK} sein, ist {direction!r}")
             events.append(ExpectedEvent(int(entry["frame"]), str(entry["kind"]),
                                         str(entry.get("track", ANY_TRACK)), direction))
+        perception = tuple(sorted(
+            (ExpectedPerceptionFrame.from_dict(entry)
+             for entry in raw.get("perception") or []),
+            key=lambda item: item.frame))
+        if len({item.frame for item in perception}) != len(perception):
+            raise ValueError(f"{path}: perception-Frames muessen eindeutig sein")
         return cls(tuple(sorted(events, key=lambda e: e.frame)),
-                   int(raw.get("tolerance", DEFAULT_TOLERANCE)))
+                   int(raw.get("tolerance", DEFAULT_TOLERANCE)), perception,
+                   PerceptionAcceptance.from_dict(raw.get("acceptance")))
 
 
 @dataclass
@@ -119,6 +131,9 @@ class Score:
         return sum(abs(o) for o in self.offsets) / len(self.offsets) if self.offsets else 0.0
 
     def label(self) -> str:
+        if self.expected == 0:
+            return ("negativ ok (Recall N/A)" if not self.spurious else
+                    f"negativ {len(self.spurious)} Falschalarm(e)")
         if self.perfect:
             return f"{self.matched}/{self.expected} ok" + (
                 f" (±{self.mean_offset:.0f}f)" if self.offsets else "")
@@ -134,6 +149,8 @@ class Score:
                  f"  Treffer                {self.matched}"
                  + (f"  (Zeitversatz im Mittel {self.mean_offset:.1f} Frames)"
                     if self.offsets else "")]
+        if self.expected == 0:
+            lines.append("  Positiv-Recall         N/A (kein positives Ereignis annotiert)")
         for event in self.missed:
             lines.append(f"  NICHT ERKANNT          f{event.frame} {event.kind} "
                          f"{event.track} nach {event.direction}")

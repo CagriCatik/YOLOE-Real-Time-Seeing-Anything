@@ -1,0 +1,7 @@
+# Negativszenario, vom Anwender bestaetigt: Es gibt in der vorhandenen
+# Szenariosammlung keinen positiven Ego-Spurwechsel. Das frueher provisorisch
+# erwartete `ego_lane_change` bei Frame 96 war nicht visuell bestaetigt und
+# darf deshalb nicht als Ground Truth dienen. Jede Ereignismeldung in dieser
+# Aufnahme ist ein messbarer Falschalarm; positive Recall bleibt N/A.
+note: kein positiver Spurwechsel; nur Falschalarme messbar
+events: []

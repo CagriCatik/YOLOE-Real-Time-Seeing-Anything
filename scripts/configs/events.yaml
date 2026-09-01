@@ -1,0 +1,44 @@
+# ============================================================================
+#  Temporale Ereignisableitung: Cut-In / Cut-Out
+#  Geladen von yoloe_lane.config.EventConfig -> yoloe_lane.lanes.events
+# ----------------------------------------------------------------------------
+#  Ein Schwellwert liefert pro Frame eine Aussage, aber kein EREIGNIS. Drei
+#  Faelle unterscheidet er nicht, die State Machine schon:
+#    1. ABGEBROCHENER Spurwechsel - driftet zur Linie und kehrt zurueck.
+#    2. FLACKERN um die Schwelle - entprellt ueber confirm_frames.
+#    3. EIGENER Spurwechsel - verschiebt die relative Nummer JEDES Tracks
+#       gleichzeitig; pro Fahrzeug sieht das wie ein Cut-In aus.
+#
+#  Die State Machine repariert KEINE schlechten Messungen. Unplausible
+#  Footprints (siehe bev.fp_width_*) werden davor ausgefiltert, nicht darin.
+# ============================================================================
+
+# ---- Zustandsschwellen (Anteil der Fahrzeugbreite in der Ego-Spur) ----------
+thr_encroaching: 0.10   # outside -> encroaching
+thr_inside: 0.50        # encroaching -> inside
+
+# ---- Entprellung -------------------------------------------------------------
+confirm_frames: 3   # so viele Frames in Folge, bevor ein Zustand uebernommen
+                    #   wird. Hoeher = traeger, aber weniger Ereignissalven.
+max_missing: 5      # Frames ohne Messung, nach denen ein Track verworfen wird
+
+# ---- Szenenebene: eigener Spurwechsel ---------------------------------------
+# Verschieben sich mindestens so viele Tracks gleichsinnig, gilt das als
+# eigener Spurwechsel und die Fahrzeugereignisse werden unterdrueckt.
+#
+# GRENZE DIESES ANSATZES: er braucht mehrere sichtbare Fremdfahrzeuge. Auf
+# Material, in dem meist nur eines im Bild ist, kann die Szenenebene nie
+# greifen. Der eigene Spurwechsel muesste dort aus der Bewegung der Spurgrenzen
+# relativ zum Ego-Footprint abgeleitet werden.
+ego_shift_min_tracks: 2
+ego_refractory_frames: 6   # Nachlauffenster; ohne das leckt ein falscher
+                           #   cut_in durch, sobald sich die Relativnummer nach
+                           #   dem eigenen Wechsel stabilisiert hat
+
+# ---- Beleg fuer den eigenen Spurwechsel --------------------------------------
+# Die Szenenebene oben stuetzt sich auf Fremdfahrzeuge. Zwei gleichzeitig
+# gleichsinnig wechselnde Fahrzeuge sehen davon aus wie ein eigener Wechsel --
+# und die Unterdrueckung loescht dann genau deren echte Ereignisse. Deshalb muss
+# der Ego-Footprint dabei auch wirklich seine Spurgrenze beruehren.
+# 1.0 schaltet den Beleg ab.
+ego_departure_max: 0.90

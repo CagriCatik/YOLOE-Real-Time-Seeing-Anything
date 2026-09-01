@@ -48,7 +48,7 @@ zuerst.
 
 ```text
 scenarien/<name>.mp4              die Aufnahme (oder ein Ordner mit Frames)
-config/scenarios/<name>.yaml      optional: nur die Abweichungen
+configs/scenarios/<name>.yaml      optional: nur die Abweichungen
 results/<name>/                   Debug-Videos, CSVs, summary.txt
 ```
 

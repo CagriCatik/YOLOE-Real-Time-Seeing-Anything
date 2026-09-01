@@ -60,7 +60,7 @@ ihrer.
 
 ### Stufe 1 — Bildebene: von Pixeln zu Spurlinien
 
-`adascope/lanes/detection.py`, Kalibrierung in `config/lane.yaml`
+`adascope/lanes/detection.py`, Kalibrierung in `configs/lane.yaml`
 
 ```mermaid
 flowchart TB
@@ -101,7 +101,7 @@ wert als Zufallsproben.
 
 ### Stufe 2 — Homographie mit Gedächtnis
 
-`adascope/lanes/bev.py` + `pipeline.py`, Kalibrierung in `config/bev.yaml`
+`adascope/lanes/bev.py` + `pipeline.py`, Kalibrierung in `configs/bev.yaml`
 
 Die beiden **äußersten** durchgezogenen Linien werden auf `x_left` / `x_right`
 abgebildet. Warum „äußerste" und nicht einfach `{L.role: L}`: bei mehreren
@@ -168,7 +168,7 @@ Spurlisten von 53 % auf 100 % auf demselben Abschnitt.
 
 ### Stufe 4 — Ego-relative Nummerierung
 
-`adascope/lanes/indexing.py`, Kalibrierung in `config/indexing.yaml`
+`adascope/lanes/indexing.py`, Kalibrierung in `configs/indexing.yaml`
 
 Positionsbasierte Indizes (L0…Ln von links) rutschen, sobald eine Grenze
 ausfällt — Falschalarm ohne Szenenänderung. Zwei Maßnahmen:
@@ -225,7 +225,7 @@ kann mit fehlenden Messungen umgehen, mit falschen nicht.
 
 ### Stufe 6 — Ereignisse über die Zeit
 
-`adascope/lanes/events.py`, Kalibrierung in `config/events.yaml`
+`adascope/lanes/events.py`, Kalibrierung in `configs/events.yaml`
 
 Ein Schwellwert liefert pro Frame eine Aussage, aber kein *Ereignis*. Drei
 Fälle unterscheidet er nicht: abgebrochener Wechsel, Flackern, eigener
@@ -367,7 +367,7 @@ wenig und dämpft das.
 
 ### 5. Kurven — Sliding Windows sind gebaut, aber kein Standard
 
-`config/windows.yaml`, `method: histogram | windows`
+`configs/windows.yaml`, `method: histogram | windows`
 
 Das Spaltenhistogramm setzt **senkrechte** Säulen voraus, also gerade Spuren. In
 einer Kurve wandert dieselbe Linie über viele Spalten und die Summe verschmiert.
@@ -417,15 +417,18 @@ der Unterschied zwischen richtig und falsch.
 > ein selbstbewusst aussehender Fit über die halbe Spur. Krümmung ist ein
 > Modell-Problem, kein Ausreißer-Problem.
 
-### 6. Annotationen — der Nachweis fehlt noch fast überall
+### 6. Annotationen — Ereignisse und Wahrnehmung getrennt nachweisen
 
-**1 von 21 Aufnahmen** ist annotiert. Ohne Annotation ist „keine Ereignisse"
-nicht von „nichts erkannt" zu unterscheiden — genau diese Verwechslung hat die
-drei Defekte aus Stufe 6 verdeckt.
+Ohne positive Spurwechselaufnahme ist positiver Event-Recall nicht messbar.
+Negative Annotationen bleiben trotzdem wertvoll: `events: []` macht jede
+Meldung zum messbaren Falschalarm und berichtet Recall als N/A. Geometrische
+Qualitaet wird davon getrennt auf manuell ausgewaehlten Frames bewertet.
 
 ```powershell
 copy ground_truth\VORLAGE.yaml ground_truth\<szenario>.yaml
-adascope scenarios <szenario> --views dash    # sichten, Frames eintragen
+python scripts\annotate_perception.py <szenario> --frames 0,50,100
+python scripts\stage_09_perception_eval.py --source scenarien\<szenario>
+adascope scenarios <szenario> --views dash
 adascope scenarios                            # Rückgabewert 0 = alles erfüllt
 ```
 
@@ -433,7 +436,7 @@ adascope scenarios                            # Rückgabewert 0 = alles erfüllt
 
 ## 5. Was schon abgesichert ist
 
-**236 Tests, unter 3 Sekunden, kein Test lädt ein Modell.** Zwei Ebenen:
+**374 Tests, kein Test lädt ein Modell.** Drei Ebenen:
 
 **Synthetische Szenen** (`adascope/synthetic.py`) geben die Trajektorie vor und
 erzeugen das Bild daraus. Die Pipeline muss die vorgegebenen Ereignisse
@@ -448,6 +451,10 @@ unter Rauschen und Störstrichen · Fernfeldartefakte · Zeitpunkt des Ereigniss
 **Annotierte Aufnahmen** (`ground_truth/`) bewerten Treffer, Fehlerkennungen und
 Falschalarme mit Frame-Toleranz. `adascope scenarios` liefert Rückgabewert 0 nur,
 wenn jede vorhandene Annotation erfüllt ist — CI-tauglich.
+
+**Frameweise Wahrnehmungs-Ground-Truth** bewertet Richtungsflaechen-IoU,
+BEV-Grenzen, Spurzahl, Ego-Spurposition und optionale Fahrzeugspurzuordnungen.
+Fehlende Felder sind N/A und werden nicht als Erfolg gezaehlt.
 
 ---
 

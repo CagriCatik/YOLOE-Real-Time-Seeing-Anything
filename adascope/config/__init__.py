@@ -1,20 +1,20 @@
 """Typisierte Konfiguration, eine Datei je Domaene.
 
-    config/detection.yaml   YOLOE: Modell, ROIs, Carpet, Driving-Area, HUD
-    config/lane.yaml        Spurerkennung in der Bildebene (Hough)
-    config/bev.yaml         Bodenebene und Belegungsschwellen
-    config/tracking.yaml    YOLO11 + ByteTrack
-    config/indexing.yaml    ego-relative Spurnummerierung
-    config/events.yaml      temporale Ereignisableitung
-    config/pipeline.yaml    Zustand ueber Frames hinweg
-    config/windows.yaml     Verfahren der Spurgrenzensuche (Histogramm/Fenster)
-    config/boundaries.yaml  persistente Grenzen-IDs
-    config/egomotion.yaml   eigener Spurwechsel aus der Linienstruktur
-    config/debug.yaml       virtuelle Kameras, Farben, Layout
+    configs/detection.yaml   YOLOE: Modell, ROIs, Carpet, Driving-Area, HUD
+    configs/lane.yaml        Spurerkennung in der Bildebene (Hough)
+    configs/bev.yaml         Bodenebene und Belegungsschwellen
+    configs/tracking.yaml    YOLO11 + ByteTrack
+    configs/indexing.yaml    ego-relative Spurnummerierung
+    configs/events.yaml      temporale Ereignisableitung
+    configs/pipeline.yaml    Zustand ueber Frames hinweg
+    configs/windows.yaml     Verfahren der Spurgrenzensuche (Histogramm/Fenster)
+    configs/boundaries.yaml  persistente Grenzen-IDs
+    configs/egomotion.yaml   eigener Spurwechsel aus der Linienstruktur
+    configs/debug.yaml       virtuelle Kameras, Farben, Layout
 
 Eine Datei entspricht genau einer Dataclass. Jede Dataclass ist ohne Datei
 konstruierbar; die YAML ueberschreibt nur, was sie nennt. Szenarien liegen unter
-`config/scenarios/<name>.yaml` und enthalten je Domaenen-Sektion ausschliesslich
+`configs/scenarios/<name>.yaml` und enthalten je Domaenen-Sektion ausschliesslich
 Abweichungen -- so beschreibt eine Datei eine Aufnahmesituation vollstaendig,
 ohne die Basiskalibrierung zu kopieren.
 """
@@ -74,7 +74,18 @@ class Settings:
     def load(cls, config_dir: str | Path = DEFAULT_CONFIG_DIR,
              scenario: str | None = None, root: str | Path | None = None) -> "Settings":
         base = Path(config_dir)
-        project_root = Path(root) if root is not None else base.parent
+        if root is not None:
+            project_root = Path(root)
+        else:
+            # `scripts/configs` ist eine eigenstaendige Kalibrierkopie, aber
+            # relative Modellpfade beziehen sich weiterhin auf das Projekt.
+            # Den Root an einer stabilen Projektdatei erkennen statt pauschal
+            # `config_dir.parent` anzunehmen.
+            project_root = base.parent
+            for candidate in (base, *base.parents):
+                if (candidate / "pyproject.toml").exists():
+                    project_root = candidate
+                    break
         detection = None
         if (base / "detection.yaml").exists():
             detection = load_section(DetectionConfig, base, "detection.yaml", scenario)

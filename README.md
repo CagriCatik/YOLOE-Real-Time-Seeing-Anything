@@ -52,7 +52,7 @@ Drei Orte, verbunden über den Dateinamen:
 
 ```text
 scenarien/lane_departure_3_lanes.mp4          die Aufnahme (oder ein Frame-Ordner)
-config/scenarios/lane_departure_3_lanes.yaml  optional: NUR die Abweichungen
+configs/scenarios/lane_departure_3_lanes.yaml  optional: NUR die Abweichungen
 results/lane_departure_3_lanes/               entsteht beim Lauf
     debug_dash.mp4        Komposit mit Zeitverlauf und Ereignislog
     debug_bev.mp4         Bodenebene von oben
@@ -68,7 +68,7 @@ results/lane_departure_3_lanes/               entsteht beim Lauf
 results/index.md          Vergleichstabelle über ALLE Läufe
 ```
 
-Findet sich `config/scenarios/<name>.yaml`, wird sie automatisch als
+Findet sich `configs/scenarios/<name>.yaml`, wird sie automatisch als
 Kalibrier-Überlagerung verwendet — sonst gilt die Basiskalibrierung.
 
 ## ✅ Nachweis statt Vermutung
@@ -107,6 +107,24 @@ bekommt eine Spalte `Bewertung` (`2/2 ok (±3f)`, `1/2 1 fehlt`), und
 `adascope scenarios` liefert **Rückgabewert 0 nur, wenn jede vorhandene
 Annotation erfüllt ist** — damit taugt der Lauf als Regressionstest in CI.
 Vorlage: `ground_truth/VORLAGE.yaml`.
+
+Positive Ereignisse sind nicht Voraussetzung fuer eine sinnvolle Regression:
+`events: []` misst Falschalarme und weist den positiven Recall ausdruecklich als
+N/A aus. Zusaetzlich koennen ausgewaehlte Frames die Wahrnehmung selbst pruefen:
+
+```yaml
+perception:
+  - frame: 18
+    driving_area: [[290, 295], [855, 295], [660, 55], [535, 55]]
+    boundaries_bev: [81, 190, 302, 419]
+    lane_count: 3
+    ego_lane_position: 1
+```
+
+Die Klickhilfe `scripts/annotate_perception.py` erzeugt dafuer einen manuellen
+Entwurf. `adascope scenarios` bewertet Richtungsflaechen-IoU, Grenz-Recall und
+-Fehler, Spurzahl, Ego-Spur und optional Fahrzeugspuren und schreibt
+`debug_perception.csv`. Nicht annotierte Groessen bleiben N/A.
 
 **Zuschnitt entscheidet sich je Aufnahme.** `lane.yaml` ist in Pixeln eines
 Referenzausschnitts notiert (`reference_size`). Am ersten Frame wird geprüft:
@@ -221,7 +239,7 @@ Alles läuft über ein Kommando: `adascope <command>` (oder
 | Kommando | Zweck |
 | --- | --- |
 | `download` · `extract` · `crop` · `assemble` | Datenaufbereitung |
-| `roi-editor` · `crop-box` | Kalibrierung, schreibt nach `config/detection.yaml` |
+| `roi-editor` · `crop-box` | Kalibrierung, schreibt nach `configs/detection.yaml` |
 | `detect` | YOLOE-Analyse: Fahrzeuge, Carpet, HUD → `states.csv` + Debug-Video |
 | `probe` | YOLOE-Prompts auf einem Einzelbild ausprobieren |
 | `track` | Fahrzeugtracking in der Bildebene → Video + Track-CSV |
@@ -282,7 +300,7 @@ Drei Regeln gelten überall:
    Fehler, kein stilles Ignorieren.
 
 ```yaml
-# config/bev.yaml — Auszug
+# configs/bev.yaml — Auszug
 peak_min_distance: 55   # Mindestabstand zweier Histogramm-Peaks.
                         #   Deutlich UNTER der schmalsten echten Spurbreite,
                         #   deutlich ÜBER der Breite der Fehlpeaks. Bei 25
@@ -293,7 +311,7 @@ peak_min_distance: 55   # Mindestabstand zweier Histogramm-Peaks.
 Abweichungen:
 
 ```yaml
-# config/scenarios/lane_departure_3_lanes.yaml
+# configs/scenarios/lane_departure_3_lanes.yaml
 indexing:
   lane_width: 77        # durchgehend dreispurig -> BEV-Skala konstant
 events:
@@ -302,12 +320,12 @@ events:
 
 ```powershell
 adascope lane-debug --scenario lane_departure_3_lanes --source scenarien/...
-adascope roi-editor      # schreibt interaktiv nach config/detection.yaml
+adascope roi-editor      # schreibt interaktiv nach configs/detection.yaml
 adascope crop-box
 ```
 
 **Neue Perspektive ohne Codeänderung:** ein Eintrag unter `cameras:` in
-`config/debug.yaml` ist danach als `--views <name>` verfügbar — BEV und
+`configs/debug.yaml` ist danach als `--views <name>` verfügbar — BEV und
 Schrägsicht sind Bilder derselben Ebene, die Abbildung dazwischen ist wieder
 nur eine Homographie.
 

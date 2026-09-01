@@ -3,7 +3,7 @@
 Weil BEV und virtuelle Ansicht Bilder *derselben* Ebene sind, ist die Abbildung
 dazwischen wieder eine Homographie. Eine zusaetzliche Perspektive kostet damit
 einen `warpPerspective` und keine neue Kalibrierung -- deshalb sind Kameras
-reine Konfiguration (config/debug.yaml), nicht Code.
+reine Konfiguration (configs/debug.yaml), nicht Code.
 """
 
 from __future__ import annotations

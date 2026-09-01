@@ -166,16 +166,16 @@ User launches roi_editor.py
         ↓
 [Adjusts lane polygons on frame]
         ↓
-Saves to: config/detection.yaml
+Saves to: configs/detection.yaml
         ↓
 User launches crop_selector.py
         ↓
 [Adjusts crop region on frame]
         ↓
-Saves to: config/detection.yaml (crop_box field)
+Saves to: configs/detection.yaml (crop_box field)
 ```
 
-**Outputs:** Updated `config/detection.yaml`
+**Outputs:** Updated `configs/detection.yaml`
 
 ---
 
@@ -183,7 +183,7 @@ Saves to: config/detection.yaml (crop_box field)
 
 ```
   data/frames/raw/frame_*.jpg
-  + config/detection.yaml (crop_box field)
+  + configs/detection.yaml (crop_box field)
         ↓
   crop.py
         ↓
@@ -200,7 +200,7 @@ Saves to: config/detection.yaml (crop_box field)
 
 ```
   data/frames/raw/frame_*.jpg
-  + config/detection.yaml (ROIs, model, HSV thresholds)
+  + configs/detection.yaml (ROIs, model, HSV thresholds)
         ↓
   detect.py
         ├─→ YOLOE inference (load model + detect vehicles)
@@ -560,7 +560,7 @@ graph TB
 
 ```mermaid
 graph LR
-    A["adascope.vision.analysis"] --> B["config/detection.yaml"]
+    A["adascope.vision.analysis"] --> B["configs/detection.yaml"]
     A --> C["adascope.detection\n(Detector port)"]
     C --> D["ultralytics\n(YOLOE)"]
     C --> E["supervision\n(post-processing)"]

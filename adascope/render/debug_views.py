@@ -12,7 +12,7 @@ Videobetrieb ist das der Normalfall, nicht die Ausnahme.
     smear     BEV der Farbbilder: warum Fahrzeuge dort nicht segmentiert
               werden duerfen (Bauhoehe zerlaeuft radial)
     dash      Komposit + Zeitverlauf + Ereignislog
-    <kamera>  jede in config/debug.yaml definierte virtuelle Kamera
+    <kamera>  jede in configs/debug.yaml definierte virtuelle Kamera
 
 Farben und Kameras kommen aus `DebugConfig`, nicht aus Konstanten hier -- eine
 neue Perspektive entsteht durch einen YAML-Eintrag.
@@ -28,7 +28,7 @@ import cv2
 import numpy as np
 
 from ..config import Settings
-from ..lanes import FrameAnalysis, Lane
+from ..lanes import FrameAnalysis, Lane, outer_solid_pair
 from ..lanes.detection import build_masked_edges, cluster_segments, extract_segments
 from .camera import VirtualCamera
 from .primitives import FONT, dashed_line, dashed_polyline, fit, hud, placeholder
@@ -71,10 +71,11 @@ def ego_lane_of(fa: FrameAnalysis) -> Lane | None:
 def state_banner(canvas: np.ndarray, fa: FrameAnalysis, settings: Settings) -> None:
     debug = settings.debug
     held = f" ({fa.held_frames})" if fa.h_state == "held" else ""
+    rejection = f"  reject:{fa.h_rejection}" if fa.h_rejection else ""
     lanes = f"Spuren: {len(fa.lanes_rel)}" if fa.lanes_rel else f"Spuren: -- {fa.index_note}"
     hud(canvas, [
         (f"frame {fa.index}  {fa.name}", (255, 255, 255)),
-        (f"H: {fa.h_state}{held}", debug.color(f"homography_{fa.h_state}")),
+        (f"H: {fa.h_state}{held}{rejection}", debug.color(f"homography_{fa.h_state}")),
         (f"Korridore: {len(fa.corridors)}   {lanes}",
          (255, 255, 255) if fa.lanes_rel else debug.color("homography_held")),
         (f"Ego in Spur: {fa.ego_in_lane:.2f}", ego_color(settings, fa)),
@@ -117,13 +118,13 @@ def view_front(fa: FrameAnalysis, settings: Settings) -> np.ndarray:
         out = cv2.addWeighted(fill, 0.28, out, 0.72, 0)
 
     # Die beiden Linien, aus denen H gerechnet wurde, dicker zeichnen.
-    solids = [L for L in fa.lanes.lines if L.role.endswith("solid")]
-    used = ({min(L.x_bottom for L in solids), max(L.x_bottom for L in solids)}
-            if solids and fa.h_state == "fresh" else set())
+    pair = outer_solid_pair(fa.lanes, lane, settings.bev)
+    used = ({id(L) for L in pair}
+            if pair and fa.h_state == "fresh" and not fa.h_rejection else set())
     for L in fa.lanes.lines:
         color = role_color(settings, L.role)
         cv2.line(out, (L.x_at(lane.y_bottom), lane.y_bottom),
-                 (L.x_at(lane.y_top), lane.y_top), color, 4 if L.x_bottom in used else 2)
+                 (L.x_at(lane.y_top), lane.y_top), color, 4 if id(L) in used else 2)
         cv2.putText(out, f"{L.role} s{L.support}",
                     (L.x_at(lane.y_bottom) - 30, lane.y_bottom + 16),
                     FONT, 0.38, color, 1, cv2.LINE_AA)
@@ -165,6 +166,9 @@ def view_mask(fa: FrameAnalysis, settings: Settings) -> np.ndarray:
                         debug.color("state_inside"), 1, cv2.LINE_AA)
 
     cv2.polylines(out, [np.array(lane.roi_polygon, np.int32)], True, debug.color("roi"), 1)
+    if fa.driving_area_src is not None:
+        cv2.polylines(out, [np.rint(fa.driving_area_src).astype(np.int32)], True,
+                      (0, 220, 0), 2)
     for vehicle in fa.vehicles:        # aus der Maske ausgestanzte Bereiche
         x1, y1, x2, y2 = vehicle.bbox
         cv2.rectangle(out, (x1, y1), (x2, y2), (40, 40, 130), 1)
@@ -172,6 +176,8 @@ def view_mask(fa: FrameAnalysis, settings: Settings) -> np.ndarray:
     hud(out, [(f"frame {fa.index}", (255, 255, 255)),
               (f"Segmente: {fa.lanes.debug['n_segments']}", (255, 255, 255)),
               (f"Cluster: {len(clusters)} -> Linien: {len(fa.lanes.lines)}", (255, 255, 255)),
+              ("gruenes Polygon = einziger Downstream-Bereich", (0, 220, 0)),
+              ("farbige Linien ausserhalb = nur Diagnose-Kandidaten", (0, 180, 255)),
               (f"grau = unter min_cluster_support ({lane.min_cluster_support})",
                debug.color("state_invalid"))])
     return out
@@ -310,7 +316,9 @@ def view_hist(fa: FrameAnalysis, settings: Settings) -> np.ndarray:
         cv2.putText(out, f"b{i}", (column - 6, y - 8), FONT, 0.34, (0, 200, 255), 1)
 
     cv2.line(out, (0, cfg.height), (cfg.width, cfg.height), (60, 60, 60), 1)
-    hud(out, [(f"frame {fa.index}  H:{fa.h_state}", debug.color(f"homography_{fa.h_state}")),
+    reason = f" reject:{fa.h_rejection}" if fa.h_rejection else ""
+    hud(out, [(f"frame {fa.index}  H:{fa.h_state}{reason}",
+               debug.color(f"homography_{fa.h_state}")),
               (f"Grenzen: {len(fa.boundary_fit)} ({fa.boundary_fit.method})"
                f" -> Korridore: {len(fa.corridors)}"
                f" -> Spuren: {len(fa.lanes_rel)}", (255, 255, 255)),
@@ -492,7 +500,7 @@ STATIC_VIEWS = {
 
 
 def available_views(settings: Settings) -> list[str]:
-    """Feste Ansichten plus jede in `config/debug.yaml` definierte Kamera."""
+    """Feste Ansichten plus jede in `configs/debug.yaml` definierte Kamera."""
     return sorted({*STATIC_VIEWS, *settings.debug.cameras, "dash"})
 
 

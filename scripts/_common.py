@@ -66,21 +66,48 @@ class Detection:
 # --------------------------------------------------------------------------- #
 # Argumente                                                                   #
 # --------------------------------------------------------------------------- #
+
+SKRIPT_CONFIG = Path(__file__).resolve().parent / "configs" / "scripts.yaml"
+MODELL_EINGEBAUT = {"conf": 0.25, "iou": 0.50, "imgsz": 1280, "device": None,
+                    "stride": 1, "max_frames": 0, "fps": 25.0, "top": 15,
+                    "outdir": "outputs/model_tests"}
+
+
+def _modellvorgaben() -> dict:
+    """Abschnitt `models` aus scripts/configs/scripts.yaml, sonst Defaults.
+
+    Fehlt die Datei, laufen die Skripte unveraendert weiter -- die Vorgaben
+    sind eine Bequemlichkeit, keine Voraussetzung.
+    """
+    werte = dict(MODELL_EINGEBAUT)
+    if SKRIPT_CONFIG.exists():
+        try:
+            import yaml
+            roh = yaml.safe_load(SKRIPT_CONFIG.read_text(encoding="utf-8")) or {}
+            werte.update(roh.get("models") or {})
+        except Exception:
+            pass
+    return werte
+
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--source", required=True, type=Path,
                         help="Bild, Video oder Ordner mit Bildern")
-    parser.add_argument("--conf", type=float, default=0.25, help="Konfidenzschwelle")
-    parser.add_argument("--imgsz", type=int, default=1280)
-    parser.add_argument("--device", default=None, help="z.B. 0 oder cpu")
-    parser.add_argument("--iou", type=float, default=0.50, help="NMS-Schwelle")
-    parser.add_argument("--max-frames", type=int, default=0, help="0 = alle")
-    parser.add_argument("--stride", type=int, default=1, help="jeden n-ten Frame")
+    m = _modellvorgaben()
+    parser.add_argument("--conf", type=float, default=m["conf"],
+                        help="Konfidenzschwelle")
+    parser.add_argument("--imgsz", type=int, default=m["imgsz"])
+    parser.add_argument("--device", default=m["device"], help="z.B. 0 oder cpu")
+    parser.add_argument("--iou", type=float, default=m["iou"], help="NMS-Schwelle")
+    parser.add_argument("--max-frames", type=int, default=m["max_frames"],
+                        help="0 = alle")
+    parser.add_argument("--stride", type=int, default=m["stride"],
+                        help="jeden n-ten Frame")
     parser.add_argument("--fps", type=float, default=25.0,
                         help="Ausgabe-Bildrate für Bildordner")
     parser.add_argument("--outdir", type=Path, default=DEFAULT_OUTDIR)
     parser.add_argument("--no-labels", action="store_true",
                         help="Boxen ohne Beschriftung zeichnen")
-    parser.add_argument("--top", type=int, default=15,
+    parser.add_argument("--top", type=int, default=m["top"],
                         help="wie viele Klassen in der Zusammenfassung")
 
 

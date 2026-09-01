@@ -1,0 +1,86 @@
+# ============================================================================
+#  Voreinstellungen der Skripte in scripts/
+#  Geladen von scripts/_stage.py (Stufenskripte) und scripts/_common.py
+#  (Modell-Testskripte).
+# ----------------------------------------------------------------------------
+#  Abgrenzung zu den uebrigen Dateien in diesem Ordner: dort steht, wie die
+#  PIPELINE rechnet. Hier steht nur, womit die Skripte sie fuettern -- Quelle,
+#  Framezahl, Ausgabeort. Ein Wert hier aendert kein Ergebnis, nur was
+#  betrachtet wird.
+#
+#  Rangfolge: CLI-Flag  >  Abschnitt der Stufe  >  defaults  >  eingebauter Wert
+#  Ein explizites Flag gewinnt also immer.
+# ============================================================================
+
+defaults:
+  # Womit jede Stufe laeuft, wenn nichts anderes gesagt wird.
+  source: scenarien/lane_departure_3_lanes
+  config: configs
+  frames: 150          # 0 = alle Frames
+  fps: 25.0
+  video: true
+  # Zusaetzlich zum Video benannte Zwischenbilder der ersten N Frames.
+  # 0 schaltet sie ab; 3 reicht meist, ohne den Ausgabeordner zu fluten.
+  snapshots: 3
+  # Ausgabewurzel der Stufenskripte. Getrennt von results/, wo die
+  # Szenariolaeufe liegen -- Stufenausgaben sind Zwischenstaende zur
+  # Analyse, keine Ergebnisse eines Laufs.
+  out_root: outputs/stages
+
+# ----------------------------------------------------------------------------
+#  Abweichungen je Stufe. Nur nennen, was anders sein soll.
+# ----------------------------------------------------------------------------
+stages:
+
+  # Weissmaske und ROI. Wenige Frames genuegen -- die Schwelle ist statisch,
+  # man sieht sofort, ob sie passt.
+  stage_01_mask:
+    frames: 60
+
+  stage_02_segments:
+    frames: 60
+
+  # Rollen und Durchgezogenheit brauchen etwas Lauflaenge, damit man sieht,
+  # ob eine Linie ihre Rolle behaelt oder springt.
+  stage_03_lines:
+    frames: 200
+
+  # `basis_delta` ist das Wackeln in Zahlen -- je laenger, desto aussagekraef-
+  # tiger die Spanne.
+  stage_04_homography:
+    frames: 300
+
+  stage_05_bev:
+    frames: 150
+    # Die echte SequencePipeline entfernt Fahrzeugboxen vor dem Warp. Nur mit
+    # Detektion ist das Stufenbild deshalb exakt derselbe Eingang.
+    detect: true
+
+  stage_06_histogram:
+    frames: 200
+    detect: true
+
+  # Laedt das Detektionsmodell. Kuerzer, weil langsamer.
+  stage_07_corridors:
+    frames: 120
+    detect: true
+
+  # Ereignisse brauchen die volle Laenge -- ein Manoever in Frame 300 faellt
+  # sonst durch.
+  stage_08_events:
+    frames: 0
+    video: true
+
+# ----------------------------------------------------------------------------
+#  Modell-Testskripte (test_yolo11n, test_yolo11l_seg, test_yoloe)
+# ----------------------------------------------------------------------------
+models:
+  conf: 0.25           # Konfidenzschwelle
+  iou: 0.50            # NMS-Schwelle
+  imgsz: 1280
+  device: null         # null = automatisch, sonst "0" oder "cpu"
+  stride: 1            # jeden n-ten Frame
+  max_frames: 0        # 0 = alle
+  fps: 25.0
+  top: 15              # Klassen in der Haeufigkeitsliste
+  outdir: outputs/model_tests

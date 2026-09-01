@@ -141,12 +141,29 @@ def classify_corridor(width: float, lane_width: float,
 def split_corridors(corridors: list[Corridor], cfg: IndexConfig,
                     keep_x: float | None = None
                     ) -> tuple[list[Corridor], list[bool], float]:
-    """Zerlegt verschmolzene Korridore und verwirft Nicht-Spur-Flaechen.
+    """Zerlegt verschmolzene Korridore und behaelt NUR die eigene Fahrbahn.
 
-    `keep_x` schuetzt den Korridor, der diese Position enthaelt, vor dem
-    Verwerfen. Gedacht ist er fuer die Ego-Position -- siehe unten.
+    `keep_x` ist die Ego-Position. Sie leistet zweierlei: sie schuetzt den
+    Korridor, in dem das Ego steht, vor dem Verwerfen -- und sie waehlt aus,
+    welche Fahrbahn ueberhaupt gemeint ist.
 
     Rueckgabe: (Spurkorridore, synthetic-Flags, verwendete Spurbreite)
+
+    Warum eine Nicht-Spur-Flaeche TRENNT statt nur zu fehlen
+    -------------------------------------------------------
+    Frueher wurden zu breite oder zu schmale Korridore uebersprungen und die
+    Spuren links UND rechts davon weiterverwendet. Damit lief die Auswertung
+    ueber den Mitteltrennstreifen hinweg bis in die Gegenfahrbahn.
+
+    Im Debugvideo sichtbar als `left_solid s2` und `left_solid s5` weit links
+    jenseits der Trennung, bei `Korridore: 5, Spuren: 4` auf einer dreispurigen
+    eigenen Fahrbahn. Diese Linien zappeln (sie sind fern und flach), ihr
+    Zappeln ging in `estimate_lane_width` und in die Korridorzaehlung ein --
+    und weil `outer_solid_pair` die AEUSSERSTE Linie als Stuetzpunkt nimmt,
+    wurde die Homographie ueber die Gegenfahrbahn aufgespannt.
+
+    Fuer die Aufgabenstellung ist die Gegenfahrbahn ohne Belang: es geht um
+    Ein- und Ausscheren in der eigenen Fahrtrichtung.
 
     Warum der Ego-Korridor geschuetzt wird
     --------------------------------------
@@ -166,25 +183,54 @@ def split_corridors(corridors: list[Corridor], cfg: IndexConfig,
     """
     lane_width = cfg.lane_width or estimate_lane_width_by_multiples(
         corridors, cfg.multiple_tolerance, cfg.max_merge)
-    lanes: list[Corridor] = []
-    synthetic: list[bool] = []
+
+    # Zusammenhaengende Laeufe von Spurkorridoren. Jede Nicht-Spur-Flaeche
+    # TRENNT -- sie ist die Grenze zwischen zwei Fahrbahnen.
+    runs: list[tuple[list[Corridor], list[bool]]] = []
+    aktuell: tuple[list[Corridor], list[bool]] = ([], [])
+
+    def abschliessen() -> None:
+        if aktuell[0]:
+            runs.append((aktuell[0][:], aktuell[1][:]))
+        aktuell[0].clear()
+        aktuell[1].clear()
 
     for lo, hi in corridors:
         kind, k = classify_corridor(hi - lo, lane_width, cfg)
         if kind == "non_lane":
             if keep_x is not None and lo <= keep_x <= hi:
-                lanes.append((lo, hi))      # Ego faehrt hier -- also Spur
-                synthetic.append(False)
-            continue                        # sonst: Standstreifen, Randflaeche
+                # Ego faehrt hier -- also Spur, trotz Breitenpruefung.
+                aktuell[0].append((lo, hi))
+                aktuell[1].append(False)
+            else:
+                abschliessen()              # Mitteltrennung, Standstreifen, Rand
+            continue
         if kind == "lane":
-            lanes.append((lo, hi))
-            synthetic.append(False)
+            aktuell[0].append((lo, hi))
+            aktuell[1].append(False)
             continue
         step = (hi - lo) / k                # verschmolzen -> virtuell teilen
         for i in range(k):
-            lanes.append((lo + i * step, lo + (i + 1) * step))
-            synthetic.append(True)
-    return lanes, synthetic, lane_width
+            aktuell[0].append((lo + i * step, lo + (i + 1) * step))
+            aktuell[1].append(True)
+    abschliessen()
+
+    if not runs:
+        return [], [], lane_width
+    if keep_x is None:
+        # Ohne Ego-Bezug laesst sich die eigene Fahrbahn nicht bestimmen --
+        # dann bleibt es beim alten Verhalten, alle Laeufe zusammen.
+        return ([c for r, _ in runs for c in r],
+                [s for _, f in runs for s in f], lane_width)
+
+    for lauf, flags in runs:
+        if lauf[0][0] <= keep_x <= lauf[-1][1]:
+            return lauf, flags, lane_width
+    # Ego ausserhalb jedes Laufs: den naechstgelegenen nehmen, statt alles
+    # zusammenzuwerfen -- die Fahrbahn, auf der es faehrt, ist die naechste.
+    lauf, flags = min(runs, key=lambda rf: min(abs(rf[0][0][0] - keep_x),
+                                               abs(rf[0][-1][1] - keep_x)))
+    return lauf, flags, lane_width
 
 
 # --------------------------------------------------------------------------- #

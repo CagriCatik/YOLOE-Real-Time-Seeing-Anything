@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 def add_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config-dir", type=Path, default=DEFAULT_CONFIG_DIR,
-                        help="Verzeichnis mit den Domaenen-YAMLs (Standard: config)")
+                        help="Verzeichnis mit den Domaenen-YAMLs (Standard: configs)")
     parser.add_argument("--scenario", default=None,
                         help="Overlay aus <config-dir>/scenarios/<name>.yaml")
 

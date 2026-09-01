@@ -94,6 +94,12 @@ class _Track:
     # Fuer Richtung und Frame-Spanne: wo und wann die Bewegung begann.
     approach_from: float | None = None
     approach_frame: int | None = None
+    # Letzte gesehene Querposition. Rueckfall fuer die Richtung, wenn ein
+    # Manoever so zuegig ist, dass es das Band zwischen den Schwellen in einem
+    # Frame durchquert -- dann gibt es keinen `approach_from`, aber sehr wohl
+    # eine Bewegung. Ohne diesen Rueckfall verschluckt das Richtungs-Gate
+    # genau die schnellen Spurwechsel.
+    last_position: float | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -140,6 +146,22 @@ class CutInTracker:
         return common if count == len(moved) else None
 
     # -- Hauptschritt ------------------------------------------------------- #
+    def _direction_ok(self, direction: str, position: float | None) -> bool:
+        """Ein Ereignis ohne bestimmbare Richtung erfuellt FR-1.2 nicht.
+
+        Es entsteht, wenn sich die Querposition zwischen Anfahrt und Uebergang
+        nicht bewegt hat -- also aus einem Indexsprung, nicht aus einem
+        Fahrmanoever.
+
+        Das Gate greift NUR, wenn Lateraldaten ueberhaupt vorlagen. "Keine
+        Daten" ist etwas anderes als "Daten zeigen keine Bewegung": die State
+        Machine ist bewusst ohne `lateral` isoliert testbar, und ein fehlender
+        Eingang darf kein Ereignis verschlucken.
+        """
+        if not self.cfg.require_direction or position is None:
+            return True
+        return direction in ("links", "rechts")
+
     def update(self, frame: int, obs: dict[str, tuple[int, float]],
                ego_in_lane: float = 1.0,
                lateral: dict[str, float] | None = None,
@@ -179,10 +201,28 @@ class CutInTracker:
         lateral = lateral or {}
         boundary_at = boundary_at or {}
         for tid, (rel, overlap) in obs.items():
+            neu = tid not in self._tracks
             t = self._tracks.setdefault(tid, _Track())
             t.missing = 0
             observed = _state_for(overlap, self.cfg)
             position = lateral.get(tid)
+
+            if neu:
+                # ERSTE Beobachtung eines Tracks ist kein Uebergang -- es gibt
+                # kein Davor. Frueher startete jeder Track als `outside`; ein
+                # Fahrzeug, das beim Aufnahmestart bereits in der Ego-Spur
+                # steht, erzeugte dadurch sofort ein `cut_in`.
+                #
+                # Gemessen auf `adjusting_speed_scenario_8`: cut_in fuer ID2 in
+                # Frame 1-5, dem allerersten Frame der Aufnahme. Vom Anwender
+                # im Debugvideo als Falschalarm bestaetigt.
+                t.state = t.candidate = observed
+                t.streak = self.cfg.confirm_frames
+                # Wer von Anfang an drin ist, darf spaeter ausscheren -- das
+                # ist ein echtes Ereignis, auch ohne beobachtete Anfahrt.
+                t.was_inside = observed == "inside"
+                t.last_rel, t.last_position = rel, position
+                continue
 
             # Anfahrt zaehlen, sobald sie BEOBACHTET wird -- nicht erst, wenn
             # `encroaching` als Zustand bestaetigt ist. Ein zuegiger Spurwechsel
@@ -210,11 +250,26 @@ class CutInTracker:
             if t.streak >= self.cfg.confirm_frames and observed != t.state:
                 prev, t.state = t.state, observed
                 if observed == "inside":
-                    t.was_inside = True
-                    if t.encroach_frames >= 1 and not suppressed:
+                    # Symmetrie zwischen Ein- und Ausfahrt. Ein Eintritt OHNE
+                    # beobachtete Anfahrt ist ein Sprung (Trackluecke oder
+                    # Indexsprung) -- er ist schon fuer ein `cut_in` zu
+                    # unsicher. Dann darf er auch kein `cut_out` scharfmachen.
+                    #
+                    # Genau daran hing der doppelte Falschalarm auf
+                    # `adjusting_speed_scenario_5`: ID4 meldete zweimal
+                    # `cut_out` im Abstand von 15 Frames, beide mit
+                    # `direction: unbestimmt`. Ein Fahrzeug kann nicht zweimal
+                    # ausscheren, ohne dazwischen einzuscheren -- der
+                    # Wiedereintritt war ein Indexsprung, kein Fahrmanoever.
+                    t.was_inside = t.encroach_frames >= 1
+                    richtung = _direction(t.approach_from if t.approach_from
+                                          is not None else t.last_position,
+                                          position)
+                    if (t.encroach_frames >= 1 and not suppressed
+                            and self._direction_ok(richtung, position)):
                         events.append(Event(
                             frame, "cut_in", tid, f"({prev} -> inside)",
-                            direction=_direction(t.approach_from, position),
+                            direction=richtung,
                             boundary_id=boundary_at.get(tid),
                             frame_start=t.approach_frame, frame_end=frame))
                     t.encroach_frames = 0
@@ -224,11 +279,14 @@ class CutInTracker:
                     # Ausscheren geht inside -> encroaching -> outside, dann ist
                     # `prev` beim letzten Uebergang `encroaching`. Das als
                     # Abbruch zu melden waere falsch -- das Fahrzeug WAR drin.
+                    richtung = _direction(t.approach_from if t.approach_from
+                                          is not None else t.last_position,
+                                          position)
                     if t.was_inside:
-                        if not suppressed:
+                        if not suppressed and self._direction_ok(richtung, position):
                             events.append(Event(
                                 frame, "cut_out", tid,
-                                direction=_direction(t.approach_from, position),
+                                direction=richtung,
                                 boundary_id=boundary_at.get(tid),
                                 frame_start=t.approach_frame, frame_end=frame))
                     elif t.encroach_frames >= self.cfg.confirm_frames:
@@ -241,6 +299,8 @@ class CutInTracker:
                     t.approach_from, t.approach_frame = None, None
 
             t.last_rel = rel
+            if position is not None:
+                t.last_position = position
 
         for tid in list(self._tracks):
             if tid in obs:

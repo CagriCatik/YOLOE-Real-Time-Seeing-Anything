@@ -7,7 +7,7 @@ from ..io import list_frames, read_image
 def configure_parser(parser):
     parser.add_argument("--frame")
     parser.add_argument("--frames-dir", default="data/frames/raw")
-    parser.add_argument("--config", default="config/detection.yaml")
+    parser.add_argument("--config", default="configs/detection.yaml")
     parser.add_argument("--dump")
     parser.add_argument("--max-width", type=int, default=1600)
     parser.add_argument("--max-height", type=int, default=900)

@@ -37,7 +37,7 @@ def run(args: argparse.Namespace) -> int:
     settings = load_settings(args)
     if args.list_views:
         print("Verfuegbare Ansichten:", ", ".join(available_views(settings)))
-        print("Weitere entstehen durch einen Eintrag unter `cameras:` in config/debug.yaml.")
+        print("Weitere entstehen durch einen Eintrag unter `cameras:` in configs/debug.yaml.")
         return 0
     if args.source is None:
         raise SystemExit("--source fehlt (Videodatei oder Frame-Ordner)")

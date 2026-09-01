@@ -22,7 +22,7 @@ def configure_parser(parser):
     group.add_argument("--frame")
     group.add_argument("--frames")
     group.add_argument("--video")
-    parser.add_argument("--config", default="config/detection.yaml")
+    parser.add_argument("--config", default="configs/detection.yaml")
     parser.add_argument("--model")
     parser.add_argument("--classes", nargs="+")
     parser.add_argument("--conf", type=float)

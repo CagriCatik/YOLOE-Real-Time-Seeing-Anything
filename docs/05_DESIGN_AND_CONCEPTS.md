@@ -414,7 +414,7 @@ Aggressive:      H=40-60, S=150-255, V=180-255 (tighter range)
 
 ### Intermediate (1 hour)
 1. Edit ROI polygons: `adascope roi-editor`
-2. Adjust HSV ranges in `config/detection.yaml`
+2. Adjust HSV ranges in `configs/detection.yaml`
 3. Re-run detection and observe changes
 
 ### Advanced (2+ hours)

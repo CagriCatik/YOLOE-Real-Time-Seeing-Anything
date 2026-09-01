@@ -195,3 +195,109 @@ def test_abort_still_reported_when_the_vehicle_was_never_inside():
                             *steady({"A": (1, 0.3)}, 3),
                             *steady({"A": (1, 0.0)}, 3)])
     assert [e.kind for e in events] == ["aborted"]
+
+
+# --------------------------------------------------------------------------- #
+# Falschalarme, vom Anwender im Debugvideo bestaetigt                          #
+# --------------------------------------------------------------------------- #
+def test_a_vehicle_already_inside_at_startup_is_not_a_cut_in():
+    """`adjusting_speed_scenario_8`: cut_in fuer ID2 in Frame 1-5.
+
+    Jeder Track startete als `outside`. Ein Fahrzeug, das beim Aufnahmestart
+    bereits in der Ego-Spur steht, erzeugte dadurch sofort einen Uebergang
+    outside -> inside. Die erste Beobachtung ist aber kein Uebergang -- es gibt
+    kein Davor.
+    """
+    from adascope.config import EventConfig
+    from adascope.lanes.events import CutInTracker
+
+    fsm = CutInTracker(EventConfig(confirm_frames=2))
+    events = []
+    for f in range(10):
+        events += fsm.update(f, {"ID2": (0, 1.0)}, lateral={"ID2": 300.0})
+    assert [e.kind for e in events] == []
+
+
+def test_a_vehicle_inside_from_the_start_can_still_cut_out():
+    """Die Gegenprobe: wer von Anfang an drin ist, darf ausscheren."""
+    from adascope.config import EventConfig
+    from adascope.lanes.events import CutInTracker
+
+    fsm = CutInTracker(EventConfig(confirm_frames=2))
+    events = []
+    for f in range(6):
+        events += fsm.update(f, {"ID1": (0, 1.0)}, lateral={"ID1": 300.0})
+    for f in range(6, 10):                       # hinausdriften
+        events += fsm.update(f, {"ID1": (0, 0.3)}, lateral={"ID1": 340.0})
+    for f in range(10, 16):
+        events += fsm.update(f, {"ID1": (1, 0.0)}, lateral={"ID1": 380.0})
+    assert [e.kind for e in events] == ["cut_out"]
+    assert events[0].direction == "rechts"
+
+
+def test_an_entry_without_an_observed_approach_does_not_arm_a_cut_out():
+    """`adjusting_speed_scenario_5`: zweimal cut_out fuer ID4 in 15 Frames.
+
+    Ein Eintritt OHNE beobachtete Anfahrt ist ein Sprung -- schon fuer ein
+    cut_in zu unsicher. Dann darf er auch kein cut_out scharfmachen. Die
+    Asymmetrie war der Defekt.
+    """
+    from adascope.config import EventConfig
+    from adascope.lanes.events import CutInTracker
+
+    fsm = CutInTracker(EventConfig(confirm_frames=2))
+    events = []
+    for f in range(4):                           # weit draussen beginnen
+        events += fsm.update(f, {"ID4": (1, 0.0)}, lateral={"ID4": 400.0})
+    for f in range(4, 8):                        # aus dem Nichts drin
+        events += fsm.update(f, {"ID4": (0, 1.0)}, lateral={"ID4": 300.0})
+    for f in range(8, 12):                       # und wieder raus
+        events += fsm.update(f, {"ID4": (1, 0.0)}, lateral={"ID4": 400.0})
+    assert [e.kind for e in events] == []
+
+
+def test_an_event_without_a_determinable_direction_is_refused():
+    """FR-1.2 verlangt LINKS/RECHTS -- ein Spurwechsel ohne Querweg ist keiner."""
+    from adascope.config import EventConfig
+    from adascope.lanes.events import CutInTracker
+
+    cfg = EventConfig(confirm_frames=2, require_direction=True)
+    fsm = CutInTracker(cfg)
+    events = []
+    for f in range(4):
+        events += fsm.update(f, {"ID1": (1, 0.0)}, lateral={"ID1": 400.0})
+    for f in range(4, 8):                        # Anfahrt beobachtet ...
+        events += fsm.update(f, {"ID1": (0, 0.3)}, lateral={"ID1": 400.0})
+    for f in range(8, 12):                       # ... aber ohne Querbewegung
+        events += fsm.update(f, {"ID1": (0, 1.0)}, lateral={"ID1": 400.0})
+    assert [e.kind for e in events] == []
+
+    ohne_gate = CutInTracker(EventConfig(confirm_frames=2, require_direction=False))
+    events = []
+    for f in range(4):
+        events += ohne_gate.update(f, {"ID1": (1, 0.0)}, lateral={"ID1": 400.0})
+    for f in range(4, 8):
+        events += ohne_gate.update(f, {"ID1": (0, 0.3)}, lateral={"ID1": 400.0})
+    for f in range(8, 12):
+        events += ohne_gate.update(f, {"ID1": (0, 1.0)}, lateral={"ID1": 400.0})
+    assert [e.kind for e in events] == ["cut_in"]
+
+
+def test_the_gate_does_not_fire_when_no_lateral_data_exists():
+    """"Keine Daten" ist etwas anderes als "Daten zeigen keine Bewegung".
+
+    Die State Machine ist bewusst ohne `lateral` isoliert testbar; ein
+    fehlender Eingang darf kein Ereignis verschlucken.
+    """
+    from adascope.config import EventConfig
+    from adascope.lanes.events import CutInTracker
+
+    fsm = CutInTracker(EventConfig(confirm_frames=2, require_direction=True))
+    events = []
+    for f in range(4):
+        events += fsm.update(f, {"ID1": (1, 0.0)})
+    for f in range(4, 8):
+        events += fsm.update(f, {"ID1": (0, 0.3)})
+    for f in range(8, 12):
+        events += fsm.update(f, {"ID1": (0, 1.0)})
+    assert [e.kind for e in events] == ["cut_in"]

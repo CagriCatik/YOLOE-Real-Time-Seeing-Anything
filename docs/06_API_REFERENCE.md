@@ -81,7 +81,7 @@ adascope detect [OPTIONS]
 
 **Configuration options:**
 ```
---config-dir DIR       Config file (default: config/detection.yaml)
+--config-dir DIR       Config file (default: configs/detection.yaml)
 --model PATH        YOLOE checkpoint (overrides config)
 --classes C1 C2...  Text prompts, space-separated (overrides config)
 --conf THRESHOLD    Detection confidence 0..1 (overrides config)
@@ -134,7 +134,7 @@ adascope roi-editor [OPTIONS]
 ```
 --frame PATH        Frame to display (default: frame_001784.jpg)
 --frames-dir PATH   Folder used to resolve frame filenames
---config-dir DIR       Config file (default: config/detection.yaml)
+--config-dir DIR       Config file (default: configs/detection.yaml)
 --dump PATH         Render current ROIs to an image and exit
 ```
 
@@ -164,11 +164,11 @@ adascope roi-editor --frame data/frames/raw/frame_000100.jpg
 # Use custom config
 adascope roi-editor \
   --frame data/frames/raw/frame_000200.jpg \
-  --config configs/my_config.yaml
+  --config configss/my_config.yaml
 ```
 
 **Output:**
-- `config/detection.yaml` (if saved with S key)
+- `configs/detection.yaml` (if saved with S key)
 - No output if quit without saving (Q key)
 
 ---
@@ -185,7 +185,7 @@ adascope crop-box [OPTIONS]
 ```
 --frame PATH        Frame to display (default: frame_001784.jpg)
 --frames-dir PATH   Folder used to resolve frame filenames
---config-dir DIR       Config file (default: config/detection.yaml)
+--config-dir DIR       Config file (default: configs/detection.yaml)
 --dump PATH         Render current crop box to an image and exit
 --max-width N       Maximum display width
 --max-height N      Maximum display height
@@ -224,11 +224,11 @@ adascope crop-box --frame data/frames/raw/frame_000100.jpg
 # Use custom config
 adascope crop-box \
   --frame data/frames/raw/frame_000200.jpg \
-  --config configs/my_config.yaml
+  --config configss/my_config.yaml
 ```
 
 **Output:**
-- `config/detection.yaml` with updated `crop_box:` field (if saved with S)
+- `configs/detection.yaml` with updated `crop_box:` field (if saved with S)
 - `crop_preview.jpg` (if saved with P)
 
 ---
@@ -369,7 +369,7 @@ adascope crop [OPTIONS]
 **Crop options (pick one):**
 ```
 --box X0 Y0 X1 Y1   Crop coordinates as fractions 0..1
-                    (if not provided, reads from config/detection.yaml)
+                    (if not provided, reads from configs/detection.yaml)
 --config-dir DIR       Config file containing crop_box
 ```
 
@@ -471,7 +471,7 @@ adascope assemble \
 
 ## ⚙️ Configuration
 
-### config/detection.yaml
+### configs/detection.yaml
 
 Complete reference with annotations:
 

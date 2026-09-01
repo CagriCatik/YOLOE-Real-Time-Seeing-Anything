@@ -154,7 +154,7 @@ for name, ok in checks:
 
 ### Model Selection
 
-Edit `config/detection.yaml` to choose YOLOE variant:
+Edit `configs/detection.yaml` to choose YOLOE variant:
 
 ```yaml
 model:
@@ -256,7 +256,7 @@ Your GPU is too small for YOLOE-11L. Options:
 3. Process fewer frames: Use `--stride 5` in `detect.py`
 
 ### "No detections found"
-Adjust in `config/detection.yaml`:
+Adjust in `configs/detection.yaml`:
 ```yaml
 model:
   conf: 0.05              # Lower = more detections

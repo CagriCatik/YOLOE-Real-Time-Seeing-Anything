@@ -25,10 +25,10 @@ def run(args):
         download.run(_ns(url_arg=url, url_opt=None, out="data/raw/cluster_video.mp4", output_dir=None,
                          height=1080, ffmpeg_location=None, force=False))
     if 2 in steps: extract.run(_ns(video_arg="data/raw/cluster_video.mp4", video_opt=None, out="data/frames/raw", every=1, fps=None, max_frames=0, ext="jpg", quality=95))
-    if 3 in steps: roi_editor.run(_ns(frame=None, frames_dir="data/frames/raw", config="config/detection.yaml", dump=None))
-    if 4 in steps: crop_selector.run(_ns(frame=None, frames_dir="data/frames/raw", config="config/detection.yaml", dump=None, max_width=1600, max_height=900, step=1, fast_step=10))
-    if 5 in steps: crop.run(_ns(frames_arg="data/frames/raw", frames=None, frame=None, video=None, out="data/frames/cropped", box=None, config="config/detection.yaml", quality=95, ext="jpg"))
-    if 6 in steps: detect.run(_ns(input="data/frames/cropped", frame=None, frames=None, video=None, config="config/detection.yaml", model=None, classes=None, conf=None, stride=1, area_mode=None, hud=None, rois=None, csv="outputs/roi_debug/states.csv", out_video="outputs/roi_debug/debug.mp4", out="outputs/roi_debug/frames"))
+    if 3 in steps: roi_editor.run(_ns(frame=None, frames_dir="data/frames/raw", config="configs/detection.yaml", dump=None))
+    if 4 in steps: crop_selector.run(_ns(frame=None, frames_dir="data/frames/raw", config="configs/detection.yaml", dump=None, max_width=1600, max_height=900, step=1, fast_step=10))
+    if 5 in steps: crop.run(_ns(frames_arg="data/frames/raw", frames=None, frame=None, video=None, out="data/frames/cropped", box=None, config="configs/detection.yaml", quality=95, ext="jpg"))
+    if 6 in steps: detect.run(_ns(input="data/frames/cropped", frame=None, frames=None, video=None, config="configs/detection.yaml", model=None, classes=None, conf=None, stride=1, area_mode=None, hud=None, rois=None, csv="outputs/roi_debug/states.csv", out_video="outputs/roi_debug/debug.mp4", out="outputs/roi_debug/frames"))
     if 7 in steps: assemble.run(_ns(frames_arg="outputs/roi_debug/frames", frames=None, out="outputs/roi_debug/final.mp4", fps=25, fourcc="mp4v", ext=None, every=1))
     return 0
 

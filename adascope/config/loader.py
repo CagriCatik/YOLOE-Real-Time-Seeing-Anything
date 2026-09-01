@@ -21,7 +21,7 @@ import yaml
 
 T = TypeVar("T")
 
-DEFAULT_CONFIG_DIR = Path("config")
+DEFAULT_CONFIG_DIR = Path("configs")
 SCENARIO_DIR = "scenarios"
 
 

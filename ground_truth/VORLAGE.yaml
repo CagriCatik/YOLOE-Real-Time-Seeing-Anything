@@ -22,3 +22,25 @@ events:
   # - {frame: 142, kind: cut_in,  track: any}    # any = Track-ID egal
   # - {frame: 210, kind: cut_out, track: ID3}    # oder eine bestimmte
   # Moegliche kind-Werte: cut_in, cut_out, aborted, ego_lane_change
+
+# Optionale Wahrnehmungs-Annotationen. Koordinaten beziehen sich auf das von
+# der Pipeline verarbeitete (ggf. zugeschnittene) Bild. Nur wirklich manuell
+# bestaetigte Felder eintragen; ein fehlendes Feld wird als N/A und nicht als
+# bestanden gewertet.
+perception:
+  # - frame: 18
+  #   driving_area: [[290, 295], [855, 295], [660, 55], [535, 55]]
+  #   boundaries_bev: [81, 190, 302, 419]
+  #   lane_count: 3
+  #   ego_lane_position: 1        # von links, nullbasiert
+  #   vehicles:
+  #     - {point: [505, 145], rel: -1}  # Klickpunkt im Fahrzeug, -1/0/+1
+
+acceptance:
+  driving_area_iou_min: 0.80
+  boundary_recall_min: 0.90
+  boundary_mae_max_px: 12.0
+  boundary_tolerance_px: 15.0
+  lane_count_accuracy_min: 0.90
+  ego_lane_accuracy_min: 0.90
+  vehicle_lane_accuracy_min: 0.90

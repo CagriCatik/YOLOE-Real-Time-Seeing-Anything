@@ -21,6 +21,13 @@ roi_polygon: [[15, 300], [470, 20], [760, 20], [1195, 295]]
 white_l_min: 130       # heruntersetzen, wenn schwache Fern-Dashes fehlen
 white_l_max: 255
 
+# ---- Kanten auf der binaeren Weissmaske ------------------------------------
+# Niedriger/hoher Canny-Hysteresewert. Auf einer fast binaeren Maske wirken
+# viele Wertepaarungen gleich; die Parameter sind trotzdem explizit, damit die
+# in den Stufenskripten genannten Stellschrauben wirklich existieren.
+canny_low: 50
+canny_high: 150
+
 # ---- Hough-Segmente ----------------------------------------------------------
 hough_threshold: 30    # Mindeststimmen je Linie
 hough_min_len: 30      # kuerzere Segmente werden verworfen (Pixel)
@@ -36,6 +43,12 @@ y_top: 55
 min_line_angle_deg: 20.0     # verwirft ~horizontale Segmente (Fahrzeugdaecher)
 cluster_slope_weight: 500.0  # Gewicht der Steigung im Distanzmass des Clusterings
 cluster_max_dist: 130.0      # ab dieser Distanz beginnt ein neuer Cluster
+cluster_method: union_find    # deterministisch; `greedy` nur fuer A/B-Vergleich
+cluster_max_slope_diff: 0.35  # maximale Differenz von dx/dy
+cluster_max_lateral_gap: 28.0 # Abstand am Ueberlappungs-/Lueckenmittelpunkt
+cluster_max_top_dist: 65.0    # Projektionsabstand im Fluchtpunktband y_top
+cluster_vanishing_x_tolerance: 220.0 # Abstand zur Mitte der oberen ROI-Kante
+cluster_max_y_gap: 100.0      # groesste y-Luecke zwischen zwei Segmenten
 min_cluster_support: 2       # Cluster mit weniger Segmenten werden verworfen;
                              #   auf 1 setzen, wenn einzelne Fern-Dashes zaehlen
                              #   sollen (mehr Grenzen, mehr Fehlpeaks)

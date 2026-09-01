@@ -42,6 +42,18 @@ class EventConfig:
         if self.ego_shift_min_tracks < 1:
             raise ValueError("events.ego_shift_min_tracks muss mindestens 1 sein")
 
+    # Ereignisse ohne bestimmbare Richtung verwerfen.
+    #
+    # FR-1.2 und FR-2.3 verlangen die Richtung LINKS/RECHTS. Kommt sie als
+    # `unbestimmt` heraus, hat sich die Querposition zwischen Anfahrt und
+    # Uebergang nicht bewegt -- ein Spurwechsel ohne Querweg ist ein
+    # Widerspruch. Solche Ereignisse stammen aus Indexspruengen.
+    #
+    # Gemessen auf `adjusting_speed_scenario_5`: cut_out fuer ID4 in Frame 63,
+    # `direction: unbestimmt`, `frame_start == frame_end`. Vom Anwender im
+    # Debugvideo als Falschalarm bestaetigt.
+    require_direction: bool = True
+
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "EventConfig":
         unknown = set(raw) - set(cls.__dataclass_fields__)

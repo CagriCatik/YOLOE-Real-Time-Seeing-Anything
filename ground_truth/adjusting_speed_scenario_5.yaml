@@ -1,0 +1,10 @@
+# Vom Anwender im Debugvideo geprueft: hier passiert nachweislich nichts.
+#
+# Das System meldete hier zwei `cut_out` fuer ID4 in Frame 63 und 78, beide mit
+# `direction: unbestimmt`. Ein Fahrzeug kann nicht zweimal ausscheren, ohne
+# dazwischen einzuscheren -- der Wiedereintritt war ein Indexsprung.
+#
+# Die leere Liste ist eine AUSSAGE, keine fehlende Datei: sie schlaegt fehl,
+# sobald hier wieder ein Ereignis gemeldet wird.
+note: Anwender hat das Debugvideo gesichtet, kein Fahrmanoever erkennbar
+events: []

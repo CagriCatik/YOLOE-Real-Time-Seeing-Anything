@@ -1,6 +1,6 @@
 """YOLOE-Textprompts auf einem Einzelbild ausprobieren.
 
-Der schnelle Weg, Prompts zu finden, bevor sie in `config/detection.yaml`
+Der schnelle Weg, Prompts zu finden, bevor sie in `configs/detection.yaml`
 landen: ein Bild rein, annotiertes PNG und JSON raus. Ersetzt die frueheren
 Einzelskripte `scripts/test_yoloe_*.py`, die dafuer je eine eigene Kopie von
 Modell-Setup, Zeichnen und JSON-Ausgabe mitbrachten.

@@ -73,6 +73,12 @@ def test_empty_annotation_means_nothing_may_be_reported():
     assert not score.perfect and len(score.spurious) == 1
 
 
+def test_negative_only_annotation_reports_positive_recall_as_na():
+    score = score_events(truth(), [])
+    assert "Recall N/A" in score.label()
+    assert "Positiv-Recall" in score.as_text()
+
+
 def test_recall_and_precision_are_reported():
     score = score_events(truth((10, "cut_in"), (50, "cut_out")),
                          detected((10, "cut_in", "ID1"), (99, "cut_in", "ID2")))
@@ -112,4 +118,27 @@ def test_event_without_a_frame_is_rejected(tmp_path):
 def test_unknown_key_is_rejected(tmp_path):
     (tmp_path / "a.yaml").write_text("erwartet: []\n", encoding="utf-8")
     with pytest.raises(ValueError, match="unbekannte Schluessel"):
+        GroundTruth.load("a", tmp_path)
+
+
+def test_loads_perception_frames_and_acceptance(tmp_path):
+    (tmp_path / "a.yaml").write_text(
+        "events: []\n"
+        "perception:\n"
+        "  - {frame: 8, boundaries_bev: [81, 190, 302], lane_count: 2, "
+        "ego_lane_position: 1}\n"
+        "acceptance: {lane_count_accuracy_min: 0.95}\n",
+        encoding="utf-8")
+    loaded = GroundTruth.load("a", tmp_path)
+    assert loaded.perception[0].frame == 8
+    assert loaded.perception[0].lane_count == 2
+    assert loaded.acceptance.lane_count_accuracy_min == 0.95
+
+
+def test_duplicate_perception_frame_is_rejected(tmp_path):
+    (tmp_path / "a.yaml").write_text(
+        "perception:\n"
+        "  - {frame: 8, lane_count: 2}\n"
+        "  - {frame: 8, lane_count: 3}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="eindeutig"):
         GroundTruth.load("a", tmp_path)

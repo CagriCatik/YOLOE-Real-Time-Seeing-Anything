@@ -1,0 +1,35 @@
+# ============================================================================
+#  Sequenz-Pipeline: Zustand ueber Frames hinweg
+#  Geladen von yoloe_lane.config.PipelineConfig -> yoloe_lane.lanes.pipeline
+# ============================================================================
+
+# ---- Homographie-Persistenz --------------------------------------------------
+# Nur ein Teil der Frames liefert beide durchgezogenen Randlinien. Faellt eine
+# aus, wird die letzte gueltige Homographie so viele Frames gehalten (Zustand
+# `held`), bevor auf `none` geschaltet wird. 25 = ~1 s bei 25 fps.
+# Zu hoch: die Geometrie laeuft der Szene hinterher, ohne dass es auffaellt.
+max_hold: 25
+
+# ---- Fahrbahn-Filter fuer Detektionen ---------------------------------------
+# Detektionen, deren Bbox-Unterkante mehr als diesen Abstand unter
+# lane.y_bottom liegt, werden verworfen. Grund: das HMI zeigt unter der
+# Kamerabildflaeche ein Kombiinstrument, dessen stilisiertes Fahrzeug-Icon von
+# YOLO stabil als `car` detektiert wird - mit eigener, ueber die ganze Sequenz
+# stabiler Track-ID. Ohne diesen Filter erzeugt ein Bildschirmelement einen
+# Dauer-Cut-In-Kandidaten.
+road_margin: 25
+
+# ---- Ersatz-Ego-Box ohne Detektor -------------------------------------------
+# Nur fuer `--no-detect`, wenn die Geometrie ohne YOLO geprueft wird. Bildpixel
+# um lane.ego_x_bottom herum.
+ego_fallback_half_width: 45
+ego_fallback_height: 60
+
+# ---- Temporale Homographie-Plausibilitaet ----------------------------------
+homography_smoothing: 0.75
+homography_max_point_jump: 90.0       # groesste Eckpunktbewegung je Frame [px]
+homography_max_width_change_ratio: 0.25
+homography_max_vanishing_jump: 160.0  # Bewegung des Fluchtpunkts [px]
+homography_max_top_width_ratio: 0.80  # Fernbreite muss kleiner als Nahbreite sein
+homography_min_pair_continuity: 0.45
+homography_min_pair_support: 2

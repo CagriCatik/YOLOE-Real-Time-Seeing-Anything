@@ -8,7 +8,7 @@ from ..vision.geometry import polys_from_rois
 def configure_parser(parser):
     parser.add_argument("--frame")
     parser.add_argument("--frames-dir", default="data/frames/raw")
-    parser.add_argument("--config", default="config/detection.yaml")
+    parser.add_argument("--config", default="configs/detection.yaml")
     parser.add_argument("--dump")
 
 

@@ -12,7 +12,7 @@ def configure_parser(parser):
     group.add_argument("--video")
     parser.add_argument("--out", default="data/frames/cropped")
     parser.add_argument("--box", nargs=4, type=float)
-    parser.add_argument("--config", default="config/detection.yaml")
+    parser.add_argument("--config", default="configs/detection.yaml")
     parser.add_argument("--quality", type=int, default=95)
     parser.add_argument("--ext", choices=("jpg", "png"), default="jpg")
 
